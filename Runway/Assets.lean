@@ -460,17 +460,26 @@ a.github_link {
 .tippy-box[data-theme~='tactic'][data-placement^='left'] > .tippy-arrow::before { border-left-color: white; }
 .tippy-box[data-theme~='tactic'][data-placement^='right'] > .tippy-arrow::before { border-right-color: white; }
 
-/* Tactic state display */
+/* Tactic state display - smooth animation like proof toggle */
 .hl.lean input.tactic-toggle { display: none; }
-.hl.lean .tactic-state { display: none; }
-
-.hl.lean input.tactic-toggle:checked + .tactic-state {
-  display: block;
-  margin-top: 8px;
-  padding: 8px;
+.hl.lean .tactic-state {
+  max-height: 0;
+  overflow: hidden;
+  transition: max-height 0.3s ease-out, padding 0.3s ease-out, margin 0.3s ease-out;
+  margin-top: 0;
+  padding: 0 8px;
   background-color: #f9f9f9;
   border: 1px solid #ddd;
   border-radius: 4px;
+  opacity: 0;
+  transition: max-height 0.3s ease-out, padding 0.3s ease-out, margin 0.3s ease-out, opacity 0.3s ease-out;
+}
+
+.hl.lean input.tactic-toggle:checked + .tactic-state {
+  max-height: 500px;
+  margin-top: 8px;
+  padding: 8px;
+  opacity: 1;
 }
 
 .hl.lean .tactic > label { cursor: pointer; }
@@ -939,8 +948,6 @@ pre.lean-code {
   padding: 1rem;
   overflow-x: auto;
   background: var(--bp-bg);
-  border-radius: 4px;
-  border: 1px solid var(--bp-border);
 }
 
 /* Math rendering */
