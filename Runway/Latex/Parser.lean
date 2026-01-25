@@ -389,11 +389,11 @@ partial def parseSectionBody (level : Nat) : ParserM (Array Block) := do
     | some (.command "end") => break
     | some (.command name) =>
       let isHigher := match name with
-        | "chapter" => level >= 0
+        | "chapter" => true  -- Always break on chapter to return to parseBody
         | "section" => level >= 1
         | "subsection" => level >= 2
         | _ => false
-      if isHigher && level > 0 then break
+      if isHigher then break
       else
         let _ ← advance
         match name with
@@ -405,6 +405,12 @@ partial def parseSectionBody (level : Nat) : ParserM (Array Block) := do
           blocks := blocks.push (Block.inputLeanModule (← parseBraceContent).toName)
         | "inputleannode" =>
           blocks := blocks.push (Block.inputLeanNode (← parseBraceContent))
+        | "section" =>
+          let title ← parseBraceContent
+          skipTrivia
+          let label ← parseOptionalLabel
+          let body ← parseSectionBody 1
+          blocks := blocks.push (Block.section 1 (Inline.text title) label body)
         | "subsection" =>
           let title ← parseBraceContent
           skipTrivia
