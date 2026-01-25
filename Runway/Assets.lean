@@ -461,25 +461,27 @@ a.github_link {
 .tippy-box[data-theme~='tactic'][data-placement^='right'] > .tippy-arrow::before { border-right-color: white; }
 
 /* Tactic state display - smooth animation like proof toggle */
+/* Override Verso's display-based toggle with max-height animation */
 .hl.lean input.tactic-toggle { display: none; }
 .hl.lean .tactic-state {
+  display: block !important;  /* Override Verso's display:none */
   max-height: 0;
   overflow: hidden;
-  transition: max-height 0.3s ease-out, padding 0.3s ease-out, margin 0.3s ease-out;
+  opacity: 0;
+  transition: max-height 0.3s ease-out, opacity 0.3s ease-out, padding 0.3s ease-out, margin 0.3s ease-out;
   margin-top: 0;
   padding: 0 8px;
   background-color: #f9f9f9;
   border: 1px solid #ddd;
   border-radius: 4px;
-  opacity: 0;
-  transition: max-height 0.3s ease-out, padding 0.3s ease-out, margin 0.3s ease-out, opacity 0.3s ease-out;
 }
 
-.hl.lean input.tactic-toggle:checked + .tactic-state {
+.hl.lean input.tactic-toggle:checked ~ .tactic-state {
+  display: block !important;  /* Override Verso's display:inline-block */
   max-height: 500px;
+  opacity: 1;
   margin-top: 8px;
   padding: 8px;
-  opacity: 1;
 }
 
 .hl.lean .tactic > label { cursor: pointer; }
