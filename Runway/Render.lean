@@ -181,47 +181,78 @@ def renderDependencies (labels : Array String) : RenderM Html := do
     .seq (links.toList.intersperse (Html.text true ", ")).toArray
   )
 
-/-- Render a single blueprint node -/
+/-- Render a single blueprint node (plasTeX side-by-side layout) -/
 def renderNode (node : NodeInfo) : RenderM Html := do
   let config ← Render.getConfig
   let _ ← Render.registerHtmlId node.label
 
-  -- Header with environment type, title, and status indicator
-  let header := divClass "node-header" (
-    spanClass "node-env" (Html.text true node.envType.capitalize) ++
-    (Html.text true " ") ++
-    spanClass "node-title" (Html.text true (node.title.getD node.label)) ++
-    spanClass s!"node-status status-{node.status.toCssClass}"
-      (.tag "span" #[("data-status", node.status.toCssClass),
-                     ("title", node.status.toDisplayString)] Html.empty)
-  )
+  -- Status indicator character
+  let statusChar := match node.status with
+    | .proved => "✓"
+    | .mathLibOk => "✓"
+    | .stated => "○"
+    | .notReady => "✗"
 
-  -- Statement section (left side)
-  let statement := divClass "node-statement" (
-    .tag "h4" #[] (Html.text true "Statement") ++
-    Html.text false node.statementHtml
-  )
-
-  -- Proof section (right side, if present)
-  let proof := match node.proofHtml with
-    | some proofContent => divClass "node-proof" (
-        .tag "h4" #[] (Html.text true "Proof") ++
-        Html.text false proofContent
+  -- Left column: LaTeX statement and proof
+  let latexColumn := divClass "sbs-latex-column" (
+    -- Theorem heading
+    divClass "theorem_thmheading" (
+      spanClass "theorem_thmcaption" (Html.text true node.envType.capitalize) ++
+      Html.text true " " ++
+      spanClass "theorem_thmlabel" (Html.text true (node.title.getD node.label)) ++
+      divClass "thm_header_extras" (Html.text true statusChar)
+    ) ++
+    -- Statement content
+    divClass "theorem_thmcontent" (
+      .tag "p" #[] (Html.text false node.statementHtml)
+    ) ++
+    -- Proof (collapsible)
+    (match node.proofHtml with
+    | some proofContent =>
+      divClass "proof_wrapper proof_inline" (
+        divClass "proof_heading" (
+          spanClass "proof_caption" (Html.text true "Proof") ++
+          spanClass "expand-proof" (Html.text true "▶")
+        ) ++
+        divClass "proof_content" (
+          .tag "p" #[] (Html.text false proofContent)
+        )
       )
-    | none => Html.empty
+    | none => Html.empty)
+  )
 
-  -- Content area with side-by-side layout
-  let content := divClass "node-content" (statement ++ proof)
+  -- Right column: Lean code with syntax highlighting
+  let leanColumn := divClass "sbs-lean-column" (
+    match node.codeHtml with
+    | some codeHtml =>
+      -- The lean-code wrapper with hover data attribute
+      let hoverAttr := match node.hoverData with
+        | some hd => #[("data-lean-hovers", hd)]
+        | none => #[]
+      .tag "pre" (#[("class", "lean-code hl lean")] ++ hoverAttr) (
+        -- Signature section (for now, includes all code)
+        .tag "code" #[("class", "hl lean lean-signature")] (Html.text false codeHtml)
+      )
+    | none =>
+      -- Fallback: show declaration names
+      .tag "pre" #[("class", "lean-code")] (
+        .tag "code" #[("class", "hl lean")] (
+          Html.text true (String.intercalate "\n" (node.declNames.map toString).toList)
+        )
+      )
+  )
 
-  -- Footer with declaration links and dependencies
-  let declLinks ← renderDeclLinks node.declNames config.docgen4Url
+  -- Dependency links footer (shown below the sbs container)
   let depLinks ← renderDependencies node.uses
-  let footer := divClass "node-footer" (declLinks ++ depLinks)
+  let footer := if node.uses.isEmpty then Html.empty else
+    divClass "node-footer" depLinks
 
+  -- Main container with plasTeX-compatible classes
+  let envClass := s!"theorem-style-{node.envType.toLower}"
   return .tag "div" #[
     ("id", node.label),
-    ("class", s!"node node-{node.status.toCssClass}")
-  ] (header ++ content ++ footer)
+    ("class", s!"{node.envType.toLower}_thmwrapper sbs-container {envClass}")
+  ] (latexColumn ++ leanColumn ++ footer)
 
 /-! ## Page Rendering -/
 

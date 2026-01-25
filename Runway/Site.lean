@@ -33,6 +33,10 @@ structure NodeInfo where
   statementHtml : String
   /-- Pre-rendered HTML for the proof (if any) -/
   proofHtml : Option String
+  /-- Pre-rendered Lean code HTML (syntax-highlighted) -/
+  codeHtml : Option String := none
+  /-- Hover data JSON for Tippy.js tooltips -/
+  hoverData : Option String := none
   /-- Associated Lean declaration names -/
   declNames : Array Name
   /-- Labels of nodes this node depends on -/
@@ -53,6 +57,8 @@ instance : ToJson NodeInfo where
       | .mathLibOk => .str "mathLibOk"),
     ("statementHtml", .str n.statementHtml),
     ("proofHtml", match n.proofHtml with | some p => .str p | none => .null),
+    ("codeHtml", match n.codeHtml with | some c => .str c | none => .null),
+    ("hoverData", match n.hoverData with | some h => .str h | none => .null),
     ("declNames", .arr (n.declNames.map fun name => .str name.toString)),
     ("uses", .arr (n.uses.map .str)),
     ("url", .str n.url)
@@ -71,11 +77,13 @@ instance : FromJson NodeInfo where
       | _ => NodeStatus.stated
     let statementHtml ← j.getObjValAs? String "statementHtml"
     let proofHtml := (j.getObjValAs? String "proofHtml").toOption
+    let codeHtml := (j.getObjValAs? String "codeHtml").toOption
+    let hoverData := (j.getObjValAs? String "hoverData").toOption
     let declNamesJson ← j.getObjValAs? (Array String) "declNames" <|> pure #[]
     let declNames := declNamesJson.map (·.toName)
     let uses ← j.getObjValAs? (Array String) "uses" <|> pure #[]
     let url ← j.getObjValAs? String "url" <|> pure ""
-    return { label, title, envType, status, statementHtml, proofHtml, declNames, uses, url }
+    return { label, title, envType, status, statementHtml, proofHtml, codeHtml, hoverData, declNames, uses, url }
 
 /-- A page in the blueprint site -/
 structure SitePage where

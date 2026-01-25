@@ -9,6 +9,7 @@ import Runway.Genre
 import Runway.Site
 import Runway.Render
 import Runway.DepGraph
+import Runway.Assets
 
 /-!
 # Blueprint Theme System
@@ -671,37 +672,91 @@ def defaultJs : String := r#"
 })();
 "#
 
-/-- The primary template wrapping entire page content -/
+/-- The primary template wrapping entire page content (plasTeX-compatible structure) -/
 def primaryTemplate : Template := fun content => do
   let config ← Render.getConfig
   let toRoot ← Render.pathToRoot
+
+  -- MathJax configuration script
+  let mathjaxConfig := .tag "script" #[] (Html.text false r#"
+    MathJax = {
+      tex: {
+        inlineMath: [['$', '$'], ['\\(', '\\)']],
+        displayMath: [['$$', '$$'], ['\\[', '\\]']],
+        processEscapes: true
+      },
+      options: {
+        skipHtmlTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code']
+      }
+    };
+  "#)
 
   return .tag "html" #[("lang", "en")] (
     .tag "head" #[] (
       .tag "meta" #[("charset", "UTF-8")] Html.empty ++
       .tag "meta" #[("name", "viewport"), ("content", "width=device-width, initial-scale=1")] Html.empty ++
       .tag "title" #[] (Html.text true config.title) ++
+      -- Local CSS
       .tag "link" #[("rel", "stylesheet"), ("href", s!"{toRoot}runway.css")] Html.empty ++
       .tag "link" #[("rel", "icon"), ("href", "data:,")] Html.empty ++
-      .tag "script" #[("src", s!"{toRoot}runway.js"), ("defer", "")] Html.empty
+      -- MathJax config and script
+      mathjaxConfig ++
+      .tag "script" #[("id", "MathJax-script"), ("async", ""),
+                      ("src", "https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js")] Html.empty ++
+      -- Popper.js (required by Tippy)
+      .tag "script" #[("src", "https://unpkg.com/@popperjs/core@2")] Html.empty ++
+      -- Tippy.js for hover tooltips
+      .tag "script" #[("src", "https://unpkg.com/tippy.js@6")] Html.empty ++
+      .tag "link" #[("rel", "stylesheet"),
+                    ("href", "https://unpkg.com/tippy.js@6/themes/light-border.css")] Html.empty ++
+      -- marked.js for docstring rendering
+      .tag "script" #[("src", "https://cdn.jsdelivr.net/npm/marked/marked.min.js")] Html.empty
     ) ++
     .tag "body" #[] (
-      divClass "blueprint-container" (
-        -- Navigation
-        divClass "blueprint-nav" (
-          .tag "h1" #[] (Html.text true config.title) ++
-          divClass "nav-links" (
-            (match config.githubUrl with
-             | some url => htmlLink url (Html.text true "GitHub") none
-             | none => Html.empty) ++
-            (match config.docgen4Url with
-             | some url => htmlLink url (Html.text true "Docs") none
-             | none => Html.empty)
+      -- plasTeX header with blue gradient
+      .tag "header" #[] (
+        .tag "nav" #[("class", "header")] (
+          divClass "nav-wrapper" (
+            .tag "a" #[("class", "brand-logo left"), ("href", s!"{toRoot}index.html")] (
+              Html.text true config.title
+            ) ++
+            .tag "ul" #[("class", "nav-list right")] (
+              (match config.githubUrl with
+               | some url => .tag "li" #[] (
+                   .tag "a" #[("href", url), ("target", "_blank")] (Html.text true "GitHub")
+                 )
+               | none => Html.empty) ++
+              (match config.docgen4Url with
+               | some url => .tag "li" #[] (
+                   .tag "a" #[("href", url), ("target", "_blank")] (Html.text true "API Docs")
+                 )
+               | none => Html.empty)
+            )
+          )
+        )
+      ) ++
+      -- Main wrapper with sidebar and content
+      divClass "wrapper" (
+        -- Sidebar toggle button (for mobile)
+        .tag "span" #[("id", "toc-toggle")] (Html.text true "☰") ++
+        -- Table of contents sidebar
+        .tag "nav" #[("class", "toc")] (
+          .tag "ul" #[("class", "sub-toc-0")] (
+            .tag "li" #[("class", "active")] (
+              .tag "a" #[("href", s!"{toRoot}index.html")] (Html.text true "Blueprint Home")
+            )
+            -- TODO: Add section navigation items here
           )
         ) ++
-        -- Main content
-        .tag "main" #[] content
-      )
+        -- Main content area
+        divClass "content" content
+      ) ++
+      -- jQuery (for proof toggles)
+      .tag "script" #[("src", "https://code.jquery.com/jquery-3.7.1.min.js"),
+                      ("integrity", "sha256-/JqT3SQfawRcv/BIHPThkBvs0OEvtFFmqPF/lYI/Cxo="),
+                      ("crossorigin", "anonymous")] Html.empty ++
+      -- Local JavaScript
+      .tag "script" #[("src", s!"{toRoot}runway.js")] Html.empty
     )
   )
 
@@ -713,14 +768,14 @@ def indexTemplate : IndexTemplate := renderIndex
 
 end DefaultTheme
 
-/-- The default Blueprint theme -/
+/-- The default Blueprint theme (plasTeX-compatible) -/
 def defaultTheme : Theme where
   name := "default"
   primaryTemplate := DefaultTheme.primaryTemplate
   nodeTemplate := DefaultTheme.nodeTemplate
   indexTemplate := DefaultTheme.indexTemplate
-  cssFiles := #[("runway.css", DefaultTheme.defaultCss)]
-  jsFiles := #[("runway.js", DefaultTheme.defaultJs, false)]
+  cssFiles := #[("runway.css", Assets.blueprintCss)]
+  jsFiles := #[("runway.js", Assets.runwayJs, false)]
 
 /-! ## Theme Application -/
 

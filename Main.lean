@@ -30,6 +30,8 @@ Commands:
 namespace Runway.CLI
 
 open System (FilePath)
+open Std (HashMap)
+open Runway (loadDepGraph loadDeclArtifacts DeclArtifact)
 
 /-- CLI configuration parsed from command-line arguments -/
 structure CLIConfig where
@@ -123,6 +125,44 @@ def loadDepGraphJson (dressedDir : FilePath) : IO (Option String) := do
   else
     return none
 
+/-- Find and load decl.html and decl.hovers.json for a node by searching the dressed directory iteratively -/
+def loadCodeHtmlAndHovers (dressedDir : FilePath) (sanitizedLabel : String) : IO (Option String × Option String) := do
+  -- Search for the decl.html file in any module subdirectory
+  -- The path is: dressed/{Module/Path}/{sanitized-label}/decl.html
+  -- Use iterative BFS instead of recursion to avoid termination issues
+  let mut queue : Array FilePath := #[dressedDir]
+  let mut found : Option FilePath := none
+
+  while !queue.isEmpty && found.isNone do
+    match queue.back? with
+    | none => break
+    | some dir =>
+      queue := queue.pop
+      for entry in ← dir.readDir do
+        if ← entry.path.isDir then
+          if entry.fileName == sanitizedLabel then
+            -- Found the label directory
+            found := some entry.path
+          else
+            queue := queue.push entry.path
+
+  match found with
+  | some declDir =>
+    -- Load HTML
+    let htmlPath := declDir / "decl.html"
+    let codeHtml ← if ← htmlPath.pathExists then
+      some <$> IO.FS.readFile htmlPath
+    else
+      pure none
+    -- Load hover data
+    let hoversPath := declDir / "decl.hovers.json"
+    let hoverData ← if ← hoversPath.pathExists then
+      some <$> IO.FS.readFile hoversPath
+    else
+      pure none
+    return (codeHtml, hoverData)
+  | none => return (none, none)
+
 /-- Build a BlueprintSite from Dress artifacts -/
 def buildSiteFromArtifacts (config : Config) (dressedDir : FilePath) : IO BlueprintSite := do
   -- Load the dependency graph
@@ -132,21 +172,53 @@ def buildSiteFromArtifacts (config : Config) (dressedDir : FilePath) : IO Bluepr
   let depGraphSvg ← loadDepGraphSvg dressedDir
   let depGraphJson ← loadDepGraphJson dressedDir
 
-  -- Convert graph nodes to NodeInfo
-  let nodes := depGraph.nodes.map fun node =>
-    { label := node.id
+  -- Load decl.tex artifacts (contains statement/proof HTML)
+  let declArtifacts ← loadDeclArtifacts dressedDir
+  IO.println s!"  - Loaded {declArtifacts.size} declaration artifacts from .tex files"
+
+  -- Convert graph nodes to NodeInfo, populating HTML from artifacts
+  let mut nodes : Array NodeInfo := #[]
+  for node in depGraph.nodes do
+    -- Look up artifact by node id (which is the sanitized label)
+    let artifact := declArtifacts.get? node.id
+    -- Load the syntax-highlighted code HTML and hover data
+    let (codeHtml, hoverData) ← loadCodeHtmlAndHovers dressedDir node.id
+    nodes := nodes.push {
+      label := node.id
       title := some node.label
       envType := node.envType
       status := node.status
-      statementHtml := ""  -- Would be populated from module artifacts
-      proofHtml := none
+      statementHtml := artifact.bind (·.statementHtml) |>.getD ""
+      proofHtml := artifact.bind (·.proofHtml)
+      codeHtml := codeHtml
+      hoverData := hoverData
       declNames := node.leanDecls
       uses := (depGraph.inEdges node.id).map (·.from_)
-      url := node.url }
+      url := node.url
+    }
+
+  -- If no nodes from graph, build from artifacts directly
+  let mut finalNodes := nodes
+  if nodes.isEmpty && !declArtifacts.isEmpty then
+    for (key, art) in declArtifacts.toArray do
+      let (codeHtml, hoverData) ← loadCodeHtmlAndHovers dressedDir key
+      finalNodes := finalNodes.push {
+        label := key
+        title := if art.name.isEmpty then none else some art.name
+        envType := "theorem"  -- Default, will be overridden when graph is available
+        status := if art.leanOk then .proved else .stated
+        statementHtml := art.statementHtml.getD ""
+        proofHtml := art.proofHtml
+        codeHtml := codeHtml
+        hoverData := hoverData
+        declNames := if art.name.isEmpty then #[] else #[art.name.toName]
+        uses := art.uses
+        url := s!"#node-{key}"
+      }
 
   return {
     config := config
-    nodes := nodes
+    nodes := finalNodes
     depGraph := depGraph
     pages := #[]
     depGraphSvg := depGraphSvg

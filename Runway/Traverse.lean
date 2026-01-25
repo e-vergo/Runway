@@ -11,6 +11,8 @@ import Runway.Graph
 import Runway.Site
 import Runway.Dress.Load
 
+open Runway.Dress (decodeBase64String)
+
 /-!
 # Document Traversal
 
@@ -85,22 +87,23 @@ instance : FromJson Graph where
 
 /-! ## Artifact Loading -/
 
-/-- Raw declaration artifact from Dress module JSON -/
+/-- Raw declaration artifact from Dress .tex files -/
 structure DeclArtifact where
-  /-- Pre-rendered HTML for the declaration -/
-  html : String
-  /-- Base64-encoded HTML (for LaTeX embedding) -/
-  htmlBase64 : Option String := none
-  /-- Base64-encoded JSON (SubVerso highlighting) -/
-  jsonBase64 : Option String := none
+  /-- Declaration name -/
+  name : String
+  /-- Label for cross-referencing -/
+  label : String
+  /-- Pre-rendered statement HTML (decoded from base64) -/
+  statementHtml : Option String := none
+  /-- Pre-rendered proof HTML (decoded from base64) -/
+  proofHtml : Option String := none
+  /-- JSON hover data (decoded from base64) -/
+  hoverData : Option String := none
+  /-- Dependencies (from \uses{}) -/
+  uses : Array String := #[]
+  /-- Is Lean-proven? (has \leanok) -/
+  leanOk : Bool := false
   deriving Repr, Inhabited
-
-instance : FromJson DeclArtifact where
-  fromJson? j := do
-    let html ← j.getObjValAs? String "html"
-    let htmlBase64 := (j.getObjValAs? String "htmlBase64").toOption
-    let jsonBase64 := (j.getObjValAs? String "jsonBase64").toOption
-    return { html, htmlBase64, jsonBase64 }
 
 /-- Node artifact combining graph node with rendered content -/
 structure NodeArtifact where
@@ -110,6 +113,10 @@ structure NodeArtifact where
   statementHtml : Option String := none
   /-- Pre-rendered proof HTML -/
   proofHtml : Option String := none
+  /-- Pre-rendered Lean code HTML (syntax-highlighted) -/
+  codeHtml : Option String := none
+  /-- Hover data JSON for Tippy.js tooltips -/
+  hoverData : Option String := none
   deriving Repr, Inhabited
 
 /-- Convert a NodeArtifact to a NodeInfo for site building -/
@@ -120,9 +127,100 @@ def NodeArtifact.toNodeInfo (art : NodeArtifact) (uses : Array String := #[]) : 
     status := art.node.status
     statementHtml := art.statementHtml.getD ""
     proofHtml := art.proofHtml
+    codeHtml := art.codeHtml
+    hoverData := art.hoverData
     declNames := art.node.leanDecls
     uses := uses
     url := art.node.url }
+
+/-- Decode base64 string to UTF-8 String -/
+private def decodeBase64String (s : String) : Option String := Dress.decodeBase64String s
+
+/-- Check if substr is contained in s -/
+private def containsSubstr (s substr : String) : Bool :=
+  (s.splitOn substr).length > 1
+
+/-- Find index of substr in s, returns position after the substring -/
+private def findSubstrEnd (s substr : String) : Option Nat :=
+  let parts := s.splitOn substr
+  if parts.length > 1 then
+    some (parts[0]!.length + substr.length)
+  else
+    none
+
+/-- Extract value from a LaTeX command like \cmd{value} -/
+private def extractLatexArg (content : String) (cmd : String) : Option String := Id.run do
+  -- Find \cmd{
+  let cmdPrefix := s!"\\{cmd}\{"
+  match findSubstrEnd content cmdPrefix with
+  | none => return none
+  | some startIdx =>
+    let afterCmd := (content.drop startIdx).toString
+    -- Find matching }
+    let mut depth := 1
+    let mut endIdx := 0
+    for c in afterCmd.toList do
+      if depth == 0 then break
+      if c == '{' then depth := depth + 1
+      else if c == '}' then depth := depth - 1
+      if depth > 0 then endIdx := endIdx + c.utf8Size
+    if depth == 0 then
+      return some (afterCmd.take endIdx).toString
+    else
+      return none
+
+/-- Parse a decl.tex file and extract artifact data -/
+def parseDeclTex (content : String) : DeclArtifact := Id.run do
+  let mut artifact : DeclArtifact := { name := "", label := "" }
+
+  -- Extract label from \label{...}
+  if let some label := extractLatexArg content "label" then
+    artifact := { artifact with label := label }
+
+  -- Extract Lean name from \lean{...}
+  if let some name := extractLatexArg content "lean" then
+    artifact := { artifact with name := name }
+
+  -- Extract and decode signature HTML from \leansignaturesourcehtml{base64}
+  if let some sigBase64 := extractLatexArg content "leansignaturesourcehtml" then
+    if let some sigHtml := decodeBase64String sigBase64 then
+      artifact := { artifact with statementHtml := some sigHtml }
+
+  -- Extract and decode proof HTML from \leanproofsourcehtml{base64}
+  if let some proofBase64 := extractLatexArg content "leanproofsourcehtml" then
+    if let some proofHtml := decodeBase64String proofBase64 then
+      artifact := { artifact with proofHtml := some proofHtml }
+
+  -- Extract hover data from \leanhoverdata{base64}
+  if let some hoverBase64 := extractLatexArg content "leanhoverdata" then
+    if let some hoverJson := decodeBase64String hoverBase64 then
+      artifact := { artifact with hoverData := some hoverJson }
+
+  -- Extract dependencies from \uses{dep1,dep2,...}
+  if let some usesStr := extractLatexArg content "uses" then
+    let deps := usesStr.splitOn "," |>.map (fun s => String.ofList (s.toList.dropWhile Char.isWhitespace)) |>.filter (!·.isEmpty)
+    artifact := { artifact with uses := deps.toArray }
+
+  -- Check for \leanok
+  artifact := { artifact with leanOk := containsSubstr content "\\leanok" }
+
+  return artifact
+
+/-- Recursively find all decl.tex files in a directory -/
+partial def findDeclTexFiles (dir : System.FilePath) : IO (Array System.FilePath) := do
+  if !(← dir.pathExists) then return #[]
+
+  let entries ← dir.readDir
+  let mut results : Array System.FilePath := #[]
+  for entry in entries do
+    let path := entry.path
+    if ← path.isDir then
+      -- Recursively search subdirectories
+      let subResults ← findDeclTexFiles path
+      results := results ++ subResults
+    else if path.fileName == some "decl.tex" then
+      results := results.push path
+  return results
 
 /-- Load the dependency graph from Dress output -/
 def loadDepGraph (dressedDir : System.FilePath) : IO Graph := do
@@ -135,37 +233,22 @@ def loadDepGraph (dressedDir : System.FilePath) : IO Graph := do
       IO.eprintln s!"Warning: Failed to parse dep-graph.json: {e}"
       return { nodes := #[], edges := #[] }
   else
+    IO.eprintln s!"Note: dep-graph.json not found at {depGraphPath}"
     return { nodes := #[], edges := #[] }
 
-/-- Load declaration artifacts from a module JSON file -/
-def loadModuleArtifacts (jsonPath : System.FilePath) : IO (HashMap String DeclArtifact) := do
-  if ← jsonPath.pathExists then
-    let content ← IO.FS.readFile jsonPath
-    match Json.parse content with
-    | .ok (.obj entries) =>
-      let mut result : HashMap String DeclArtifact := {}
-      for (name, value) in entries.toArray do
-        match FromJson.fromJson? value with
-        | .ok art => result := result.insert name art
-        | .error _ => pure ()
-      return result
-    | _ => return {}
-  else
-    return {}
+/-- Load all decl.tex artifacts from dressed directory -/
+def loadDeclArtifacts (dressedDir : System.FilePath) : IO (HashMap String DeclArtifact) := do
+  let texFiles ← findDeclTexFiles dressedDir
+  let mut artifacts : HashMap String DeclArtifact := {}
 
-/-- Scan for module JSON files in the dressed directory -/
-def findModuleJsonFiles (dressedDir : System.FilePath) : IO (Array System.FilePath) := do
-  if ← dressedDir.pathExists then
-    let entries ← dressedDir.readDir
-    let jsonFiles := entries.filterMap fun entry =>
-      let path := entry.path
-      if path.extension == some "json" && path.fileName != some "dep-graph.json" then
-        some path
-      else
-        none
-    return jsonFiles
-  else
-    return #[]
+  for texPath in texFiles do
+    let content ← IO.FS.readFile texPath
+    let artifact := parseDeclTex content
+    -- Use label as key (removing colon prefix like "lem:" -> "lem-...")
+    let key := artifact.label.replace ":" "-"
+    artifacts := artifacts.insert key artifact
+
+  return artifacts
 
 /-- Load all artifacts from a Dress output directory -/
 def loadDressedArtifacts (dressedDir : System.FilePath) : IO Blueprint.State := do
@@ -177,13 +260,11 @@ def loadDressedArtifacts (dressedDir : System.FilePath) : IO Blueprint.State := 
   for node in depGraph.nodes do
     nodes := nodes.insert node.id node
 
-  -- Load declaration artifacts from all module JSON files
-  let moduleFiles ← findModuleJsonFiles dressedDir
-  let mut declArtifacts : HashMap String DeclArtifact := {}
-  for jsonPath in moduleFiles do
-    let moduleArts ← loadModuleArtifacts jsonPath
-    for (name, art) in moduleArts.toList do
-      declArtifacts := declArtifacts.insert name art
+  -- If no nodes from graph, build from tex artifacts
+  if nodes.isEmpty then
+    let artifacts ← loadDeclArtifacts dressedDir
+    IO.eprintln s!"Loaded {artifacts.size} artifacts from decl.tex files"
+    -- We'll need to create nodes from artifacts when graph isn't available
 
   return { nodes, usedRefs := {}, errors := {}, usedIds := {} }
 
