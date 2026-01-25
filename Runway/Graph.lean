@@ -88,4 +88,41 @@ def Graph.outEdges (g : Graph) (id : String) : Array Edge :=
 def Graph.inEdges (g : Graph) (id : String) : Array Edge :=
   g.edges.filter (·.to == id)
 
+/-! ## JSON Serialization -/
+
+open Lean (Json toJson)
+
+instance : ToJson NodeStatus where
+  toJson s := match s with
+    | .stated => "stated"
+    | .proved => "proved"
+    | .notReady => "notReady"
+    | .mathLibOk => "mathLibOk"
+
+instance : ToJson Node where
+  toJson n := Json.mkObj [
+    ("id", n.id),
+    ("label", n.label),
+    ("envType", n.envType),
+    ("status", toJson n.status),
+    ("url", n.url),
+    ("leanDecls", toJson (n.leanDecls.map (·.toString)))
+  ]
+
+instance : ToJson Edge where
+  toJson e := Json.mkObj [
+    ("from", e.from_),
+    ("to", e.to)
+  ]
+
+instance : ToJson Graph where
+  toJson g := Json.mkObj [
+    ("nodes", toJson g.nodes),
+    ("edges", toJson g.edges)
+  ]
+
+/-- Serialize graph to JSON string for embedding in HTML -/
+def Graph.toJsonString (g : Graph) : String :=
+  (toJson g).compress
+
 end Runway.Graph

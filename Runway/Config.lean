@@ -28,6 +28,8 @@ structure Config where
   baseUrl : String := "/"
   /-- Output directory for generated HTML -/
   outputDir : System.FilePath := "_site"
+  /-- Path to the blueprint.tex file for chapter-based navigation -/
+  blueprintTexPath : Option String := none
   deriving Inhabited, Repr
 
 instance : ToJson Config where
@@ -37,7 +39,8 @@ instance : ToJson Config where
     ("githubUrl", match c.githubUrl with | some u => .str u | none => .null),
     ("docgen4Url", match c.docgen4Url with | some u => .str u | none => .null),
     ("baseUrl", .str c.baseUrl),
-    ("outputDir", .str c.outputDir.toString)
+    ("outputDir", .str c.outputDir.toString),
+    ("blueprintTexPath", match c.blueprintTexPath with | some p => .str p | none => .null)
   ]
 
 instance : FromJson Config where
@@ -48,6 +51,7 @@ instance : FromJson Config where
     let docgen4Url : Option String := (j.getObjValAs? String "docgen4Url").toOption
     let baseUrl : String ← j.getObjValAs? String "baseUrl" <|> pure "/"
     let outputDir : String ← j.getObjValAs? String "outputDir" <|> pure "_site"
+    let blueprintTexPath : Option String := (j.getObjValAs? String "blueprintTexPath").toOption
     return {
       title := title
       projectName := projectName
@@ -55,6 +59,7 @@ instance : FromJson Config where
       docgen4Url := docgen4Url
       baseUrl := baseUrl
       outputDir := outputDir
+      blueprintTexPath := blueprintTexPath
     }
 
 end Runway

@@ -541,6 +541,96 @@ a.github_link {
 .hl.lean .conclusion .type {
   font-family: 'JetBrains Mono', 'Fira Code', monospace;
 }
+
+/* ========== Multi-page Navigation ========== */
+.prev-next-nav {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 3rem;
+  padding-top: 1.5rem;
+  border-top: 1px solid #e5e7eb;
+}
+
+.prev-next-nav a {
+  color: #396282;
+  text-decoration: none;
+  padding: 0.5rem 1rem;
+  border: 1px solid #e5e7eb;
+  border-radius: 4px;
+  transition: background-color 0.2s;
+}
+
+.prev-next-nav a:hover {
+  background-color: #f3f4f6;
+}
+
+.prev-next-nav a.prev {
+  margin-right: auto;
+}
+
+.prev-next-nav a.next {
+  margin-left: auto;
+}
+
+/* Chapter list on index page */
+.chapter-list {
+  margin: 2rem 0;
+}
+
+.chapter-list h2 {
+  margin-bottom: 1rem;
+  color: #0f2f48;
+}
+
+.chapter-index {
+  padding-left: 1.5rem;
+}
+
+.chapter-index li {
+  margin: 0.5rem 0;
+  line-height: 1.6;
+}
+
+.chapter-index a {
+  color: #396282;
+  text-decoration: none;
+}
+
+.chapter-index a:hover {
+  text-decoration: underline;
+}
+
+/* Chapter page styling */
+.chapter-page {
+  margin: 1rem 0;
+}
+
+.chapter-title {
+  color: #0f2f48;
+  margin-bottom: 1.5rem;
+}
+
+.chapter-nodes, .section-nodes {
+  margin: 1rem 0;
+}
+
+.section {
+  margin: 2rem 0;
+  padding-top: 1rem;
+  border-top: 1px solid #e5e7eb;
+}
+
+.section-title {
+  color: #0f2f48;
+  margin-bottom: 1rem;
+}
+
+/* Active sidebar item highlighting */
+nav.toc li.active a {
+  background-color: #497da5;
+  font-weight: bold;
+}
 "#
 
 /-- PlasTeX JavaScript - proof toggle and TOC functionality -/

@@ -171,16 +171,6 @@ def renderDeclLinks (names : Array Name) (docgen4Url : Option String) : RenderM 
     .seq (links.toList.intersperse (Html.text true ", ")).toArray
   )
 
-/-- Render dependency links for a node -/
-def renderDependencies (labels : Array String) : RenderM Html := do
-  if labels.isEmpty then return Html.empty
-  let links := labels.map fun label =>
-    htmlLink s!"#{label}" (Html.text true label) (some "dep-link")
-  return divClass "node-deps" (
-    spanClass "deps-label" (Html.text true "Uses: ") ++
-    .seq (links.toList.intersperse (Html.text true ", ")).toArray
-  )
-
 /-- Render a single blueprint node (plasTeX side-by-side layout) -/
 def renderNode (node : NodeInfo) : RenderM Html := do
   let config ← Render.getConfig
@@ -221,19 +211,37 @@ def renderNode (node : NodeInfo) : RenderM Html := do
     | none => Html.empty)
   )
 
-  -- Right column: Lean code with syntax highlighting
+  -- Right column: Lean code with syntax highlighting (signature + proof body separate)
   let leanColumn := divClass "sbs-lean-column" (
-    match node.codeHtml with
-    | some codeHtml =>
+    match node.signatureHtml, node.proofBodyHtml with
+    | some sigHtml, some proofHtml =>
       -- The lean-code wrapper with hover data attribute
       let hoverAttr := match node.hoverData with
         | some hd => #[("data-lean-hovers", hd)]
         | none => #[]
       .tag "pre" (#[("class", "lean-code hl lean")] ++ hoverAttr) (
-        -- Signature section (for now, includes all code)
-        .tag "code" #[("class", "hl lean lean-signature")] (Html.text false codeHtml)
+        -- Signature (always visible)
+        .tag "code" #[("class", "hl lean lean-signature")] (Html.text false sigHtml) ++
+        -- Proof body (hidden by default, synced with LaTeX proof toggle)
+        .tag "code" #[("class", "hl lean lean-proof-body")] (Html.text false proofHtml)
       )
-    | none =>
+    | some sigHtml, none =>
+      -- Only signature, no proof body
+      let hoverAttr := match node.hoverData with
+        | some hd => #[("data-lean-hovers", hd)]
+        | none => #[]
+      .tag "pre" (#[("class", "lean-code hl lean")] ++ hoverAttr) (
+        .tag "code" #[("class", "hl lean lean-signature")] (Html.text false sigHtml)
+      )
+    | none, some proofHtml =>
+      -- Only proof body (unusual case)
+      let hoverAttr := match node.hoverData with
+        | some hd => #[("data-lean-hovers", hd)]
+        | none => #[]
+      .tag "pre" (#[("class", "lean-code hl lean")] ++ hoverAttr) (
+        .tag "code" #[("class", "hl lean lean-proof-body")] (Html.text false proofHtml)
+      )
+    | none, none =>
       -- Fallback: show declaration names
       .tag "pre" #[("class", "lean-code")] (
         .tag "code" #[("class", "hl lean")] (
@@ -242,17 +250,12 @@ def renderNode (node : NodeInfo) : RenderM Html := do
       )
   )
 
-  -- Dependency links footer (shown below the sbs container)
-  let depLinks ← renderDependencies node.uses
-  let footer := if node.uses.isEmpty then Html.empty else
-    divClass "node-footer" depLinks
-
   -- Main container with plasTeX-compatible classes
   let envClass := s!"theorem-style-{node.envType.toLower}"
   return .tag "div" #[
     ("id", node.label),
     ("class", s!"{node.envType.toLower}_thmwrapper sbs-container {envClass}")
-  ] (latexColumn ++ leanColumn ++ footer)
+  ] (latexColumn ++ leanColumn)
 
 /-! ## Page Rendering -/
 

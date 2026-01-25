@@ -672,6 +672,55 @@ def defaultJs : String := r#"
 })();
 "#
 
+/-- Render sidebar navigation for chapters -/
+def renderSidebar (chapters : Array ChapterInfo) (currentSlug : Option String) (toRoot : String) : Html :=
+  let homeClass := if currentSlug.isNone then "active" else ""
+  let homeItem := .tag "li" #[("class", homeClass)] (
+    .tag "a" #[("href", s!"{toRoot}index.html")] (Html.text true "Blueprint Home")
+  )
+
+  let chapterItems := chapters.map fun chapter =>
+    let isActive := currentSlug == some chapter.slug
+    let itemClass := if isActive then "active" else ""
+    let href := s!"{toRoot}{chapter.slug}.html"
+    let chapterPrefix := if chapter.isAppendix then "Appendix" else s!"{chapter.number}."
+    .tag "li" #[("class", itemClass)] (
+      .tag "a" #[("href", href)] (Html.text true s!"{chapterPrefix} {chapter.title}")
+    )
+
+  .tag "nav" #[("class", "toc")] (
+    .tag "ul" #[("class", "sub-toc-0")] (
+      homeItem ++ .seq chapterItems
+    )
+  )
+
+/-- Render prev/next navigation links -/
+def renderPrevNextNav (chapters : Array ChapterInfo) (currentSlug : String) (toRoot : String) : Html :=
+  -- Find current chapter index
+  let currentIdx := chapters.findIdx? (·.slug == currentSlug)
+  match currentIdx with
+  | none => Html.empty
+  | some idx =>
+    let prevLink := if idx > 0 then
+      let prev := chapters[idx - 1]!
+      .tag "a" #[("href", s!"{toRoot}{prev.slug}.html"), ("class", "prev")] (
+        Html.text true s!"← {prev.title}"
+      )
+    else
+      .tag "a" #[("href", s!"{toRoot}index.html"), ("class", "prev")] (
+        Html.text true "← Home"
+      )
+
+    let nextLink := if idx + 1 < chapters.size then
+      let next := chapters[idx + 1]!
+      .tag "a" #[("href", s!"{toRoot}{next.slug}.html"), ("class", "next")] (
+        Html.text true s!"{next.title} →"
+      )
+    else
+      Html.empty
+
+    .tag "nav" #[("class", "prev-next-nav")] (prevLink ++ nextLink)
+
 /-- The primary template wrapping entire page content (plasTeX-compatible structure) -/
 def primaryTemplate : Template := fun content => do
   let config ← Render.getConfig
@@ -739,17 +788,105 @@ def primaryTemplate : Template := fun content => do
       divClass "wrapper" (
         -- Sidebar toggle button (for mobile)
         .tag "span" #[("id", "toc-toggle")] (Html.text true "☰") ++
-        -- Table of contents sidebar
+        -- Table of contents sidebar (default single-page version)
         .tag "nav" #[("class", "toc")] (
           .tag "ul" #[("class", "sub-toc-0")] (
             .tag "li" #[("class", "active")] (
               .tag "a" #[("href", s!"{toRoot}index.html")] (Html.text true "Blueprint Home")
             )
-            -- TODO: Add section navigation items here
           )
         ) ++
         -- Main content area
         divClass "content" content
+      ) ++
+      -- jQuery (for proof toggles)
+      .tag "script" #[("src", "https://code.jquery.com/jquery-3.7.1.min.js"),
+                      ("integrity", "sha256-/JqT3SQfawRcv/BIHPThkBvs0OEvtFFmqPF/lYI/Cxo="),
+                      ("crossorigin", "anonymous")] Html.empty ++
+      -- Local JavaScript
+      .tag "script" #[("src", s!"{toRoot}runway.js")] Html.empty
+    )
+  )
+
+/-- Primary template with chapter sidebar navigation -/
+def primaryTemplateWithSidebar (chapters : Array ChapterInfo) (currentSlug : Option String) : Template := fun content => do
+  let config ← Render.getConfig
+  let toRoot ← Render.pathToRoot
+
+  -- MathJax configuration script
+  let mathjaxConfig := .tag "script" #[] (Html.text false r#"
+    MathJax = {
+      tex: {
+        inlineMath: [['$', '$'], ['\\(', '\\)']],
+        displayMath: [['$$', '$$'], ['\\[', '\\]']],
+        processEscapes: true
+      },
+      options: {
+        skipHtmlTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code']
+      }
+    };
+  "#)
+
+  -- Build sidebar
+  let sidebar := renderSidebar chapters currentSlug toRoot
+
+  -- Build prev/next nav for chapter pages
+  let prevNextNav := match currentSlug with
+    | some slug => renderPrevNextNav chapters slug toRoot
+    | none => Html.empty
+
+  return .tag "html" #[("lang", "en")] (
+    .tag "head" #[] (
+      .tag "meta" #[("charset", "UTF-8")] Html.empty ++
+      .tag "meta" #[("name", "viewport"), ("content", "width=device-width, initial-scale=1")] Html.empty ++
+      .tag "title" #[] (Html.text true config.title) ++
+      -- Local CSS
+      .tag "link" #[("rel", "stylesheet"), ("href", s!"{toRoot}runway.css")] Html.empty ++
+      .tag "link" #[("rel", "icon"), ("href", "data:,")] Html.empty ++
+      -- MathJax config and script
+      mathjaxConfig ++
+      .tag "script" #[("id", "MathJax-script"), ("async", ""),
+                      ("src", "https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js")] Html.empty ++
+      -- Popper.js (required by Tippy)
+      .tag "script" #[("src", "https://unpkg.com/@popperjs/core@2")] Html.empty ++
+      -- Tippy.js for hover tooltips
+      .tag "script" #[("src", "https://unpkg.com/tippy.js@6")] Html.empty ++
+      .tag "link" #[("rel", "stylesheet"),
+                    ("href", "https://unpkg.com/tippy.js@6/themes/light-border.css")] Html.empty ++
+      -- marked.js for docstring rendering
+      .tag "script" #[("src", "https://cdn.jsdelivr.net/npm/marked/marked.min.js")] Html.empty
+    ) ++
+    .tag "body" #[] (
+      -- plasTeX header with blue gradient
+      .tag "header" #[] (
+        .tag "nav" #[("class", "header")] (
+          divClass "nav-wrapper" (
+            .tag "a" #[("class", "brand-logo left"), ("href", s!"{toRoot}index.html")] (
+              Html.text true config.title
+            ) ++
+            .tag "ul" #[("class", "nav-list right")] (
+              (match config.githubUrl with
+               | some url => .tag "li" #[] (
+                   .tag "a" #[("href", url), ("target", "_blank")] (Html.text true "GitHub")
+                 )
+               | none => Html.empty) ++
+              (match config.docgen4Url with
+               | some url => .tag "li" #[] (
+                   .tag "a" #[("href", url), ("target", "_blank")] (Html.text true "API Docs")
+                 )
+               | none => Html.empty)
+            )
+          )
+        )
+      ) ++
+      -- Main wrapper with sidebar and content
+      divClass "wrapper" (
+        -- Sidebar toggle button (for mobile)
+        .tag "span" #[("id", "toc-toggle")] (Html.text true "☰") ++
+        -- Chapter sidebar navigation
+        sidebar ++
+        -- Main content area with prev/next nav
+        divClass "content" (content ++ prevNextNav)
       ) ++
       -- jQuery (for proof toggles)
       .tag "script" #[("src", "https://code.jquery.com/jquery-3.7.1.min.js"),
@@ -832,5 +969,117 @@ def generateSite (theme : Theme) (site : BlueprintSite) (outputDir : System.File
   theme.writeAssets outputDir
 
   IO.println s!"Site generated at {outputDir}"
+
+/-- Render a chapter page content -/
+def renderChapterContent (chapter : ChapterInfo) : RenderM Html := do
+  -- Chapter title
+  let titlePrefix := if chapter.isAppendix then "Appendix" else s!"Chapter {chapter.number}"
+  let chapterTitle := .tag "h1" #[("class", "chapter-title")] (
+    Html.text true s!"{titlePrefix}: {chapter.title}"
+  )
+
+  -- Prose content (with placeholders for nodes converted to actual nodes)
+  let proseHtml := Html.text false chapter.proseHtml
+
+  -- Note: Nodes are rendered separately based on nodeLabels, for now just render prose
+
+  -- Render sections
+  let mut sectionHtmls : Array Html := #[]
+  for sec in chapter.sections do
+    let sectionTitle := match sec.number with
+      | some n => .tag "h2" #[("class", "section-title")] (Html.text true s!"{chapter.number}.{n} {sec.title}")
+      | none => .tag "h2" #[("class", "section-title")] (Html.text true sec.title)
+
+    let sectionProseHtml := Html.text false sec.proseHtml
+
+    sectionHtmls := sectionHtmls.push (
+      divClass "section-wrapper" (
+        sectionTitle ++
+        sectionProseHtml
+      )
+    )
+
+  return divClass "chapter-page" (
+    chapterTitle ++
+    proseHtml ++
+    .seq sectionHtmls
+  )
+
+/-- Render multi-page index with chapter list -/
+def renderMultiPageIndex (site : BlueprintSite) : RenderM Html := do
+  let config ← Render.getConfig
+
+  -- Title section
+  let titleSection := divClass "index-header" (
+    .tag "h1" #[] (Html.text true config.title) ++
+    (match config.githubUrl with
+     | some url => htmlLink url (Html.text true "GitHub") (some "github-link")
+     | none => Html.empty) ++
+    (match config.docgen4Url with
+     | some url => htmlLink url (Html.text true "Documentation") (some "docs-link")
+     | none => Html.empty)
+  )
+
+  -- Progress section
+  let progress := renderProgress site
+
+  -- Dependency graph section
+  let graphSection := DepGraph.graphSection site.depGraphSvg site.depGraphJson
+
+  -- Chapter list
+  let chapterList := divClass "chapter-list" (
+    .tag "h2" #[] (Html.text true "Chapters") ++
+    .tag "ol" #[("class", "chapter-index")] (
+      .seq (site.chapters.map fun chapter =>
+        let chapterPrefix := if chapter.isAppendix then "Appendix" else ""
+        .tag "li" #[] (
+          .tag "a" #[("href", s!"{chapter.slug}.html")] (
+            Html.text true (if chapterPrefix.isEmpty then chapter.title else s!"{chapterPrefix}: {chapter.title}")
+          )
+        )
+      )
+    )
+  )
+
+  return divClass "index-page" (
+    titleSection ++
+    progress ++
+    graphSection ++
+    chapterList
+  )
+
+/-- Generate multi-page site with chapter-based navigation -/
+def generateMultiPageSite (theme : Theme) (site : BlueprintSite) (outputDir : System.FilePath) : IO Unit := do
+  -- Create output directory
+  IO.FS.createDirAll outputDir
+
+  -- Create render context
+  let ctx : Render.Context := {
+    config := site.config
+    depGraph := site.depGraph
+    path := #[]
+  }
+
+  -- Generate index.html with chapter list
+  let (indexContent, _) ← renderMultiPageIndex site |>.run ctx
+  let templateWithSidebar := DefaultTheme.primaryTemplateWithSidebar site.chapters none
+  let (indexHtml, _) ← templateWithSidebar indexContent |>.run ctx
+  let indexHtmlStr := Html.doctype ++ "\n" ++ indexHtml.asString
+  IO.FS.writeFile (outputDir / "index.html") indexHtmlStr
+  IO.println s!"  Generated index.html"
+
+  -- Generate chapter pages
+  for chap in site.chapters do
+    let (chapterContent, _) ← renderChapterContent chap |>.run ctx
+    let chapterTemplate := DefaultTheme.primaryTemplateWithSidebar site.chapters (some chap.slug)
+    let (chapterHtml, _) ← chapterTemplate chapterContent |>.run ctx
+    let chapterHtmlStr := Html.doctype ++ "\n" ++ chapterHtml.asString
+    IO.FS.writeFile (outputDir / s!"{chap.slug}.html") chapterHtmlStr
+    IO.println s!"  Generated {chap.slug}.html"
+
+  -- Write theme assets
+  theme.writeAssets outputDir
+
+  IO.println s!"Multi-page site generated at {outputDir}"
 
 end Runway

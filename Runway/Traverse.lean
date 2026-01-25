@@ -11,6 +11,7 @@ import Runway.Graph
 import Runway.Site
 import Runway.Dress.Load
 
+open Lean (Json FromJson)
 open Runway.Dress (decodeBase64String)
 
 /-!
@@ -93,10 +94,14 @@ structure DeclArtifact where
   name : String
   /-- Label for cross-referencing -/
   label : String
-  /-- Pre-rendered statement HTML (decoded from base64) -/
-  statementHtml : Option String := none
-  /-- Pre-rendered proof HTML (decoded from base64) -/
-  proofHtml : Option String := none
+  /-- LaTeX statement text for left column (MathJax rendered) -/
+  latexStatement : Option String := none
+  /-- LaTeX proof text for left column (MathJax rendered) -/
+  latexProof : Option String := none
+  /-- Lean signature HTML for right column (syntax highlighted) -/
+  leanSignatureHtml : Option String := none
+  /-- Lean proof body HTML for right column (syntax highlighted) -/
+  leanProofBodyHtml : Option String := none
   /-- JSON hover data (decoded from base64) -/
   hoverData : Option String := none
   /-- Dependencies (from \uses{}) -/
@@ -113,8 +118,10 @@ structure NodeArtifact where
   statementHtml : Option String := none
   /-- Pre-rendered proof HTML -/
   proofHtml : Option String := none
-  /-- Pre-rendered Lean code HTML (syntax-highlighted) -/
-  codeHtml : Option String := none
+  /-- Pre-rendered Lean signature HTML (syntax-highlighted) -/
+  signatureHtml : Option String := none
+  /-- Pre-rendered Lean proof body HTML (syntax-highlighted) -/
+  proofBodyHtml : Option String := none
   /-- Hover data JSON for Tippy.js tooltips -/
   hoverData : Option String := none
   deriving Repr, Inhabited
@@ -127,7 +134,8 @@ def NodeArtifact.toNodeInfo (art : NodeArtifact) (uses : Array String := #[]) : 
     status := art.node.status
     statementHtml := art.statementHtml.getD ""
     proofHtml := art.proofHtml
-    codeHtml := art.codeHtml
+    signatureHtml := art.signatureHtml
+    proofBodyHtml := art.proofBodyHtml
     hoverData := art.hoverData
     declNames := art.node.leanDecls
     uses := uses
@@ -169,6 +177,37 @@ private def extractLatexArg (content : String) (cmd : String) : Option String :=
     else
       return none
 
+/-- Extract text between two markers, returning the text after start up to (not including) end -/
+private def extractBetween (content : String) (startMarker : String) (endMarker : String) : Option String := Id.run do
+  let parts := content.splitOn startMarker
+  if parts.length < 2 then return none
+  let afterStart := parts[1]!
+  let endParts := afterStart.splitOn endMarker
+  if endParts.isEmpty then return none
+  return some endParts[0]!.trim
+
+/-- Strip \uses{...} commands from LaTeX text -/
+private def stripUsesCommand (content : String) : String := Id.run do
+  let mut result := content
+  -- Keep stripping \uses{...} until none remain
+  while containsSubstr result "\\uses{" do
+    let parts := result.splitOn "\\uses{"
+    if parts.length < 2 then break
+    let beforeUses := parts[0]!
+    let afterUses := parts[1]!
+    -- Find matching }
+    let mut depth := 1
+    let mut endIdx := 0
+    for c in afterUses.toList do
+      if depth == 0 then break
+      if c == '{' then depth := depth + 1
+      else if c == '}' then depth := depth - 1
+      if depth > 0 then endIdx := endIdx + c.utf8Size
+      else endIdx := endIdx + 1  -- Include the closing }
+    let afterClosingBrace := afterUses.drop endIdx
+    result := beforeUses ++ afterClosingBrace
+  return result.trim
+
 /-- Parse a decl.tex file and extract artifact data -/
 def parseDeclTex (content : String) : DeclArtifact := Id.run do
   let mut artifact : DeclArtifact := { name := "", label := "" }
@@ -181,15 +220,15 @@ def parseDeclTex (content : String) : DeclArtifact := Id.run do
   if let some name := extractLatexArg content "lean" then
     artifact := { artifact with name := name }
 
-  -- Extract and decode signature HTML from \leansignaturesourcehtml{base64}
+  -- Extract and decode Lean signature HTML from \leansignaturesourcehtml{base64}
   if let some sigBase64 := extractLatexArg content "leansignaturesourcehtml" then
     if let some sigHtml := decodeBase64String sigBase64 then
-      artifact := { artifact with statementHtml := some sigHtml }
+      artifact := { artifact with leanSignatureHtml := some sigHtml }
 
-  -- Extract and decode proof HTML from \leanproofsourcehtml{base64}
+  -- Extract and decode Lean proof body HTML from \leanproofsourcehtml{base64}
   if let some proofBase64 := extractLatexArg content "leanproofsourcehtml" then
     if let some proofHtml := decodeBase64String proofBase64 then
-      artifact := { artifact with proofHtml := some proofHtml }
+      artifact := { artifact with leanProofBodyHtml := some proofHtml }
 
   -- Extract hover data from \leanhoverdata{base64}
   if let some hoverBase64 := extractLatexArg content "leanhoverdata" then
@@ -202,7 +241,59 @@ def parseDeclTex (content : String) : DeclArtifact := Id.run do
     artifact := { artifact with uses := deps.toArray }
 
   -- Check for \leanok
-  artifact := { artifact with leanOk := containsSubstr content "\\leanok" }
+  let hasLeanOk := containsSubstr content "\\leanok"
+  artifact := { artifact with leanOk := hasLeanOk }
+
+  -- Extract LaTeX statement text (between last \leanok or \uses{...} and \end{theorem/definition/lemma/...})
+  -- The statement is the text after all the metadata commands, before \end{...}
+  -- Try to find text after the last metadata marker before \end{theorem} etc.
+  let theoremEnd := "\\end{theorem}"
+  let definitionEnd := "\\end{definition}"
+  let lemmaEnd := "\\end{lemma}"
+  let propositionEnd := "\\end{proposition}"
+  let corollaryEnd := "\\end{corollary}"
+  let exampleEnd := "\\end{example}"
+  let remarkEnd := "\\end{remark}"
+
+  -- Find which end marker exists
+  let endMarker :=
+    if containsSubstr content theoremEnd then theoremEnd
+    else if containsSubstr content definitionEnd then definitionEnd
+    else if containsSubstr content lemmaEnd then lemmaEnd
+    else if containsSubstr content propositionEnd then propositionEnd
+    else if containsSubstr content corollaryEnd then corollaryEnd
+    else if containsSubstr content exampleEnd then exampleEnd
+    else if containsSubstr content remarkEnd then remarkEnd
+    else ""
+
+  if !endMarker.isEmpty then
+    -- Extract text between \leanok (in theorem block) and end marker
+    -- First, find the theorem block (before \begin{proof})
+    let proofStart := "\\begin{proof}"
+    let theoremBlock := if containsSubstr content proofStart then
+      (content.splitOn proofStart)[0]!
+    else
+      content
+
+    -- Find the LaTeX statement: text after \leanok (first occurrence in theorem block) until end marker
+    -- But we need to handle the case where \leanok comes after \uses{}
+    if let some text := extractBetween theoremBlock "\\leanok\n" endMarker then
+      artifact := { artifact with latexStatement := some (stripUsesCommand text) }
+    else if let some text := extractBetween theoremBlock "\\leanok" endMarker then
+      artifact := { artifact with latexStatement := some (stripUsesCommand text) }
+
+  -- Extract LaTeX proof text (between \leanok in proof block and \end{proof})
+  if containsSubstr content "\\begin{proof}" then
+    let proofEnd := "\\end{proof}"
+    if let some proofBlock := extractBetween content "\\begin{proof}" proofEnd then
+      -- Find text after \leanok in the proof block
+      if let some proofText := extractBetween proofBlock "\\leanok\n" "" then
+        artifact := { artifact with latexProof := some (stripUsesCommand proofText) }
+      else if let some proofText := extractBetween proofBlock "\\leanok" "" then
+        artifact := { artifact with latexProof := some (stripUsesCommand proofText) }
+      else
+        -- No \leanok in proof, use whole proof block
+        artifact := { artifact with latexProof := some (stripUsesCommand proofBlock) }
 
   return artifact
 
@@ -222,20 +313,6 @@ partial def findDeclTexFiles (dir : System.FilePath) : IO (Array System.FilePath
       results := results.push path
   return results
 
-/-- Load the dependency graph from Dress output -/
-def loadDepGraph (dressedDir : System.FilePath) : IO Graph := do
-  let depGraphPath := dressedDir / "dep-graph.json"
-  if ← depGraphPath.pathExists then
-    let content ← IO.FS.readFile depGraphPath
-    match Json.parse content >>= FromJson.fromJson? with
-    | .ok g => return g
-    | .error e =>
-      IO.eprintln s!"Warning: Failed to parse dep-graph.json: {e}"
-      return { nodes := #[], edges := #[] }
-  else
-    IO.eprintln s!"Note: dep-graph.json not found at {depGraphPath}"
-    return { nodes := #[], edges := #[] }
-
 /-- Load all decl.tex artifacts from dressed directory -/
 def loadDeclArtifacts (dressedDir : System.FilePath) : IO (HashMap String DeclArtifact) := do
   let texFiles ← findDeclTexFiles dressedDir
@@ -249,6 +326,63 @@ def loadDeclArtifacts (dressedDir : System.FilePath) : IO (HashMap String DeclAr
     artifacts := artifacts.insert key artifact
 
   return artifacts
+
+/-- Build a dependency graph from decl.tex artifacts.
+    Creates nodes from artifacts and edges from \uses{} dependencies. -/
+def buildGraphFromArtifacts (artifacts : HashMap String DeclArtifact) : Graph := Id.run do
+  let mut nodes : Array Node := #[]
+  let mut edges : Array Edge := #[]
+
+  for (key, art) in artifacts.toArray do
+    -- Create node
+    let status : NodeStatus := if art.leanOk then .proved else .stated
+    -- Determine env type from label prefix
+    let envType :=
+      if art.label.startsWith "thm:" || art.label.startsWith "thm-" then "theorem"
+      else if art.label.startsWith "lem:" || art.label.startsWith "lem-" then "theorem"
+      else if art.label.startsWith "prop:" || art.label.startsWith "prop-" then "proposition"
+      else if art.label.startsWith "cor:" || art.label.startsWith "cor-" then "corollary"
+      else if art.label.startsWith "def:" then "definition"
+      else if key.startsWith "def-" then "definition"
+      else "theorem"
+    let node : Node := {
+      id := key
+      label := if art.name.isEmpty then key else art.name
+      envType
+      status
+      url := s!"#node-{key}"
+      leanDecls := if art.name.isEmpty then #[] else #[art.name.toName]
+    }
+    nodes := nodes.push node
+
+    -- Create edges from uses
+    for dep in art.uses do
+      let depKey := dep.replace ":" "-"
+      edges := edges.push { from_ := key, to := depKey }
+
+  return { nodes, edges }
+
+/-- Load the dependency graph from Dress output, falling back to building from artifacts -/
+def loadDepGraph (dressedDir : System.FilePath) : IO Graph := do
+  let depGraphPath := dressedDir / "dep-graph.json"
+  if ← depGraphPath.pathExists then
+    let content ← IO.FS.readFile depGraphPath
+    match Json.parse content >>= (FromJson.fromJson? : Json → Except String Graph) with
+    | .ok g =>
+      -- Check if the graph has nodes; if empty, fall back to building from artifacts
+      if g.nodes.isEmpty then
+        IO.eprintln s!"Note: dep-graph.json exists but has no nodes, building from artifacts..."
+        let artifacts ← loadDeclArtifacts dressedDir
+        return buildGraphFromArtifacts artifacts
+      return g
+    | .error e =>
+      IO.eprintln s!"Warning: Failed to parse dep-graph.json: {e}"
+      let artifacts ← loadDeclArtifacts dressedDir
+      return buildGraphFromArtifacts artifacts
+  else
+    IO.eprintln s!"Note: dep-graph.json not found at {depGraphPath}, building from artifacts..."
+    let artifacts ← loadDeclArtifacts dressedDir
+    return buildGraphFromArtifacts artifacts
 
 /-- Load all artifacts from a Dress output directory -/
 def loadDressedArtifacts (dressedDir : System.FilePath) : IO Blueprint.State := do

@@ -19,6 +19,81 @@ open Lean (Name Json ToJson FromJson)
 open Verso Doc
 open Runway.Graph (NodeStatus Graph Node Edge)
 
+/-! ## Chapter and Section Structures -/
+
+/-- Convert a title to a URL-safe slug -/
+def titleToSlug (title : String) : String :=
+  title.toLower
+    |>.map (fun c => if c.isAlphanum then c else '-')
+    |> String.toList
+    |> List.filter (fun c => c.isAlphanum || c == '-')
+    |> collapseHyphens
+    |> String.ofList
+    |> dropTrailingHyphens
+    |> dropLeadingHyphens
+where
+  collapseHyphens : List Char → List Char
+    | [] => []
+    | [c] => [c]
+    | '-' :: '-' :: rest => collapseHyphens ('-' :: rest)
+    | c :: rest => c :: collapseHyphens rest
+  dropTrailingHyphens (s : String) : String :=
+    s.toList.reverse.dropWhile (· == '-') |>.reverse |> String.ofList
+  dropLeadingHyphens (s : String) : String :=
+    s.toList.dropWhile (· == '-') |> String.ofList
+
+/-- Information about a section within a chapter -/
+structure SectionInfo where
+  /-- Section number (1, 2, 3, ...) or none for unnumbered sections -/
+  number : Option Nat := none
+  /-- Section title -/
+  title : String
+  /-- URL-safe slug (e.g., "definition-and-basic-properties") -/
+  slug : String
+  /-- Rendered prose HTML content -/
+  proseHtml : String := ""
+  /-- Node labels in this section (resolved at render time) -/
+  nodeLabels : Array String := #[]
+  deriving Inhabited, Repr
+
+/-- Information about a chapter -/
+structure ChapterInfo where
+  /-- Chapter number (1, 2, 3, ...) -/
+  number : Nat
+  /-- Chapter title -/
+  title : String
+  /-- URL-safe slug (e.g., "psi-function") -/
+  slug : String
+  /-- Whether this is an appendix chapter -/
+  isAppendix : Bool := false
+  /-- Rendered prose HTML content -/
+  proseHtml : String := ""
+  /-- Sections within this chapter -/
+  sections : Array SectionInfo := #[]
+  /-- Node labels in this chapter (resolved at render time) -/
+  nodeLabels : Array String := #[]
+  deriving Inhabited, Repr
+
+instance : ToJson SectionInfo where
+  toJson s := .mkObj [
+    ("number", match s.number with | some n => .num n | none => .null),
+    ("title", .str s.title),
+    ("slug", .str s.slug),
+    ("proseHtml", .str s.proseHtml),
+    ("nodeLabels", .arr (s.nodeLabels.map .str))
+  ]
+
+instance : ToJson ChapterInfo where
+  toJson c := .mkObj [
+    ("number", .num c.number),
+    ("title", .str c.title),
+    ("slug", .str c.slug),
+    ("isAppendix", .bool c.isAppendix),
+    ("proseHtml", .str c.proseHtml),
+    ("sections", .arr (c.sections.map ToJson.toJson)),
+    ("nodeLabels", .arr (c.nodeLabels.map .str))
+  ]
+
 /-- Detailed information about a blueprint node for rendering -/
 structure NodeInfo where
   /-- The node's unique label -/
@@ -33,8 +108,10 @@ structure NodeInfo where
   statementHtml : String
   /-- Pre-rendered HTML for the proof (if any) -/
   proofHtml : Option String
-  /-- Pre-rendered Lean code HTML (syntax-highlighted) -/
-  codeHtml : Option String := none
+  /-- Pre-rendered Lean signature HTML (syntax-highlighted) -/
+  signatureHtml : Option String := none
+  /-- Pre-rendered Lean proof body HTML (syntax-highlighted) -/
+  proofBodyHtml : Option String := none
   /-- Hover data JSON for Tippy.js tooltips -/
   hoverData : Option String := none
   /-- Associated Lean declaration names -/
@@ -57,7 +134,8 @@ instance : ToJson NodeInfo where
       | .mathLibOk => .str "mathLibOk"),
     ("statementHtml", .str n.statementHtml),
     ("proofHtml", match n.proofHtml with | some p => .str p | none => .null),
-    ("codeHtml", match n.codeHtml with | some c => .str c | none => .null),
+    ("signatureHtml", match n.signatureHtml with | some c => .str c | none => .null),
+    ("proofBodyHtml", match n.proofBodyHtml with | some c => .str c | none => .null),
     ("hoverData", match n.hoverData with | some h => .str h | none => .null),
     ("declNames", .arr (n.declNames.map fun name => .str name.toString)),
     ("uses", .arr (n.uses.map .str)),
@@ -77,13 +155,14 @@ instance : FromJson NodeInfo where
       | _ => NodeStatus.stated
     let statementHtml ← j.getObjValAs? String "statementHtml"
     let proofHtml := (j.getObjValAs? String "proofHtml").toOption
-    let codeHtml := (j.getObjValAs? String "codeHtml").toOption
+    let signatureHtml := (j.getObjValAs? String "signatureHtml").toOption
+    let proofBodyHtml := (j.getObjValAs? String "proofBodyHtml").toOption
     let hoverData := (j.getObjValAs? String "hoverData").toOption
     let declNamesJson ← j.getObjValAs? (Array String) "declNames" <|> pure #[]
     let declNames := declNamesJson.map (·.toName)
     let uses ← j.getObjValAs? (Array String) "uses" <|> pure #[]
     let url ← j.getObjValAs? String "url" <|> pure ""
-    return { label, title, envType, status, statementHtml, proofHtml, codeHtml, hoverData, declNames, uses, url }
+    return { label, title, envType, status, statementHtml, proofHtml, signatureHtml, proofBodyHtml, hoverData, declNames, uses, url }
 
 /-- A page in the blueprint site -/
 structure SitePage where
@@ -109,6 +188,8 @@ structure BlueprintSite where
   depGraphSvg : Option String := none
   /-- JSON data for the dependency graph (from Dress) -/
   depGraphJson : Option String := none
+  /-- Chapters extracted from blueprint.tex (for multi-page navigation) -/
+  chapters : Array ChapterInfo := #[]
   deriving Inhabited
 
 namespace BlueprintSite
@@ -172,6 +253,8 @@ structure SiteBuilder where
   depGraphSvg : Option String := none
   /-- JSON data for the dependency graph -/
   depGraphJson : Option String := none
+  /-- Chapters extracted from blueprint.tex -/
+  chapters : Array ChapterInfo := #[]
   deriving Inhabited
 
 namespace SiteBuilder
@@ -204,6 +287,14 @@ def setDepGraphFiles (builder : SiteBuilder) (svg json : Option String) : SiteBu
 def addPage (builder : SiteBuilder) (page : SitePage) : SiteBuilder :=
   { builder with pages := builder.pages.push page }
 
+/-- Set chapters -/
+def setChapters (builder : SiteBuilder) (chapters : Array ChapterInfo) : SiteBuilder :=
+  { builder with chapters := chapters }
+
+/-- Add a chapter to the site -/
+def addChapter (builder : SiteBuilder) (chapter : ChapterInfo) : SiteBuilder :=
+  { builder with chapters := builder.chapters.push chapter }
+
 /-- Build the final site -/
 def build (builder : SiteBuilder) : BlueprintSite :=
   { config := builder.config
@@ -211,7 +302,8 @@ def build (builder : SiteBuilder) : BlueprintSite :=
     depGraph := builder.depGraph
     pages := builder.pages
     depGraphSvg := builder.depGraphSvg
-    depGraphJson := builder.depGraphJson }
+    depGraphJson := builder.depGraphJson
+    chapters := builder.chapters }
 
 end SiteBuilder
 

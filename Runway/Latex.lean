@@ -6,9 +6,10 @@ import Runway.Latex.Token
 import Runway.Latex.Lexer
 import Runway.Latex.Ast
 import Runway.Latex.Parser
+import Runway.Latex.ToHtml
 
 /-!
-# LaTeX Parsing
+# LaTeX Parsing and HTML Conversion
 
-This module re-exports all LaTeX parsing components.
+This module re-exports all LaTeX parsing and HTML conversion components.
 -/

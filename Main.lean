@@ -32,6 +32,7 @@ namespace Runway.CLI
 open System (FilePath)
 open Std (HashMap)
 open Runway (loadDepGraph loadDeclArtifacts DeclArtifact)
+open Runway.Latex (parseFile extractChapters extractSections extractModuleRefs extractNodeRefs toHtml)
 
 /-- CLI configuration parsed from command-line arguments -/
 structure CLIConfig where
@@ -163,14 +164,134 @@ def loadCodeHtmlAndHovers (dressedDir : FilePath) (sanitizedLabel : String) : IO
     return (codeHtml, hoverData)
   | none => return (none, none)
 
+/-- Load and parse the blueprint.tex file to extract chapters -/
+def loadBlueprintChapters (config : Config) (allNodes : Array NodeInfo) : IO (Array ChapterInfo) := do
+  match config.blueprintTexPath with
+  | none => return #[]
+  | some texPath =>
+    let path : FilePath := texPath
+    if !(← path.pathExists) then
+      IO.eprintln s!"Warning: Blueprint tex file not found at {texPath}"
+      return #[]
+
+    IO.println s!"  - Loading blueprint structure from {texPath}"
+    let (doc, errors) ← parseFile path
+
+    for err in errors do
+      IO.eprintln s!"    LaTeX parse warning: {err}"
+
+    -- Extract chapters from document
+    let docBody := match doc.root with
+      | .document _ body => body
+      | other => #[other]
+
+    let chapterExtracts := extractChapters docBody
+    IO.println s!"  - Found {chapterExtracts.size} chapters"
+
+    -- Build a map of module name -> nodes for quick lookup
+    let moduleToNodes : HashMap Lean.Name (Array NodeInfo) := Id.run do
+      let mut m : HashMap Lean.Name (Array NodeInfo) := {}
+      for node in allNodes do
+        for declName in node.declNames do
+          -- Extract module from declaration name (e.g., Crystallographic.Psi.Basic.psi -> Crystallographic.Psi.Basic)
+          let parts := declName.components
+          if parts.length > 1 then
+            let moduleParts := parts.dropLast
+            let moduleName := moduleParts.foldl (fun acc p => acc ++ p) Lean.Name.anonymous
+            m := m.insert moduleName (m.getD moduleName #[] |>.push node)
+      return m
+
+    -- Build a map of node label -> NodeInfo for quick lookup
+    let labelToNode : HashMap String NodeInfo := Id.run do
+      let mut m : HashMap String NodeInfo := {}
+      for node in allNodes do
+        m := m.insert node.label node
+      return m
+
+    -- Convert chapter extracts to ChapterInfo
+    let mut chapters : Array ChapterInfo := #[]
+
+    for ce in chapterExtracts do
+      -- Extract module and node references from chapter body
+      let moduleRefs := extractModuleRefs ce.body
+      let nodeRefs := extractNodeRefs ce.body
+
+      -- Collect nodes for this chapter
+      let mut chapterNodes : Array NodeInfo := #[]
+
+      -- Add nodes from module references
+      for modName in moduleRefs do
+        match moduleToNodes.get? modName with
+        | some nodes => chapterNodes := chapterNodes ++ nodes
+        | none => pure ()
+
+      -- Add nodes from direct node references
+      for nodeLabel in nodeRefs do
+        match labelToNode.get? nodeLabel with
+        | some node =>
+          -- Avoid duplicates
+          if !chapterNodes.any (·.label == node.label) then
+            chapterNodes := chapterNodes.push node
+        | none => pure ()
+
+      -- Extract sections
+      let sectionExtracts := extractSections ce.body
+      let mut sectionInfos : Array SectionInfo := #[]
+
+      for se in sectionExtracts do
+        -- Collect nodes for this section
+        let sectionModuleRefs := extractModuleRefs se.body
+        let sectionNodeRefs := extractNodeRefs se.body
+
+        let mut sectionNodes : Array NodeInfo := #[]
+        for modName in sectionModuleRefs do
+          match moduleToNodes.get? modName with
+          | some nodes => sectionNodes := sectionNodes ++ nodes
+          | none => pure ()
+
+        for nodeLabel in sectionNodeRefs do
+          match labelToNode.get? nodeLabel with
+          | some node =>
+            if !sectionNodes.any (·.label == node.label) then
+              sectionNodes := sectionNodes.push node
+          | none => pure ()
+
+        -- Convert section body to HTML (excluding \inputleanmodule/\inputleannode which become placeholders)
+        let sectionHtmlResult := toHtml se.body
+
+        sectionInfos := sectionInfos.push {
+          number := se.number
+          title := se.title
+          slug := titleToSlug se.title
+          nodeLabels := sectionNodes.map (·.label)
+          proseHtml := sectionHtmlResult.html
+        }
+
+      -- Convert chapter body to HTML
+      let chapterHtmlResult := toHtml ce.body
+
+      chapters := chapters.push {
+        number := ce.number
+        title := ce.title
+        slug := titleToSlug ce.title
+        isAppendix := ce.isAppendix
+        nodeLabels := chapterNodes.map (·.label)
+        proseHtml := chapterHtmlResult.html
+        sections := sectionInfos
+      }
+
+    return chapters
+
 /-- Build a BlueprintSite from Dress artifacts -/
 def buildSiteFromArtifacts (config : Config) (dressedDir : FilePath) : IO BlueprintSite := do
   -- Load the dependency graph
   let depGraph ← loadDepGraph dressedDir
 
-  -- Load SVG and JSON for the graph
+  -- Load SVG for the graph (may be empty if not generated by Dress)
   let depGraphSvg ← loadDepGraphSvg dressedDir
-  let depGraphJson ← loadDepGraphJson dressedDir
+
+  -- Generate JSON from the graph we built (don't read from potentially empty file)
+  let depGraphJson := some depGraph.toJsonString
 
   -- Load decl.tex artifacts (contains statement/proof HTML)
   let declArtifacts ← loadDeclArtifacts dressedDir
@@ -181,17 +302,30 @@ def buildSiteFromArtifacts (config : Config) (dressedDir : FilePath) : IO Bluepr
   for node in depGraph.nodes do
     -- Look up artifact by node id (which is the sanitized label)
     let artifact := declArtifacts.get? node.id
-    -- Load the syntax-highlighted code HTML and hover data
-    let (codeHtml, hoverData) ← loadCodeHtmlAndHovers dressedDir node.id
+    -- Load hover data from decl.hovers.json (codeHtml from decl.html is the full decorated code,
+    -- so we prefer the clean signature+proof from the base64-decoded fields in decl.tex)
+    let (_, hoverData) ← loadCodeHtmlAndHovers dressedDir node.id
+
+    -- Extract Lean signature and proof body HTML separately for right column
+    let signatureHtml := match artifact with
+      | some art => art.leanSignatureHtml.filter (·.isEmpty == false)
+      | none => none
+    let proofBodyHtml := match artifact with
+      | some art => art.leanProofBodyHtml.filter (·.isEmpty == false)
+      | none => none
+
     nodes := nodes.push {
       label := node.id
       title := some node.label
       envType := node.envType
       status := node.status
-      statementHtml := artifact.bind (·.statementHtml) |>.getD ""
-      proofHtml := artifact.bind (·.proofHtml)
-      codeHtml := codeHtml
-      hoverData := hoverData
+      -- Left column: LaTeX statement and proof (for MathJax rendering)
+      statementHtml := artifact.bind (·.latexStatement) |>.getD ""
+      proofHtml := artifact.bind (·.latexProof)
+      -- Right column: Lean signature and proof body (separate for toggle sync)
+      signatureHtml := signatureHtml
+      proofBodyHtml := proofBodyHtml
+      hoverData := artifact.bind (·.hoverData) |>.orElse (fun _ => hoverData)
       declNames := node.leanDecls
       uses := (depGraph.inEdges node.id).map (·.from_)
       url := node.url
@@ -201,20 +335,31 @@ def buildSiteFromArtifacts (config : Config) (dressedDir : FilePath) : IO Bluepr
   let mut finalNodes := nodes
   if nodes.isEmpty && !declArtifacts.isEmpty then
     for (key, art) in declArtifacts.toArray do
-      let (codeHtml, hoverData) ← loadCodeHtmlAndHovers dressedDir key
+      let (_, hoverData) ← loadCodeHtmlAndHovers dressedDir key
+
+      -- Extract Lean signature and proof body HTML separately for right column
+      let signatureHtml := art.leanSignatureHtml.filter (·.isEmpty == false)
+      let proofBodyHtml := art.leanProofBodyHtml.filter (·.isEmpty == false)
+
       finalNodes := finalNodes.push {
         label := key
         title := if art.name.isEmpty then none else some art.name
         envType := "theorem"  -- Default, will be overridden when graph is available
         status := if art.leanOk then .proved else .stated
-        statementHtml := art.statementHtml.getD ""
-        proofHtml := art.proofHtml
-        codeHtml := codeHtml
-        hoverData := hoverData
+        -- Left column: LaTeX statement and proof
+        statementHtml := art.latexStatement.getD ""
+        proofHtml := art.latexProof
+        -- Right column: Lean signature and proof body (separate for toggle sync)
+        signatureHtml := signatureHtml
+        proofBodyHtml := proofBodyHtml
+        hoverData := art.hoverData.orElse (fun _ => hoverData)
         declNames := if art.name.isEmpty then #[] else #[art.name.toName]
         uses := art.uses
         url := s!"#node-{key}"
       }
+
+  -- Load chapters from blueprint.tex if configured
+  let chapters ← loadBlueprintChapters config finalNodes
 
   return {
     config := config
@@ -223,6 +368,7 @@ def buildSiteFromArtifacts (config : Config) (dressedDir : FilePath) : IO Bluepr
     pages := #[]
     depGraphSvg := depGraphSvg
     depGraphJson := depGraphJson
+    chapters := chapters
   }
 
 /-- Execute the build command -/
@@ -247,7 +393,14 @@ def runBuild (cliConfig : CLIConfig) : IO UInt32 := do
 
   -- Generate HTML output
   IO.FS.createDirAll outputDir
-  generateSite defaultTheme site outputDir
+
+  -- Generate site - multi-page if chapters available, single-page otherwise
+  if site.chapters.isEmpty then
+    -- Single-page mode (original behavior)
+    generateSite defaultTheme site outputDir
+  else
+    -- Multi-page mode with chapter pages
+    generateMultiPageSite defaultTheme site outputDir
 
   -- Write additional assets
   Assets.writeAssets outputDir
@@ -255,6 +408,8 @@ def runBuild (cliConfig : CLIConfig) : IO UInt32 := do
   IO.println s!"Site generated at {outputDir}"
   IO.println s!"  - {site.nodes.size} nodes"
   IO.println s!"  - {site.depGraph.edges.size} dependency edges"
+  if !site.chapters.isEmpty then
+    IO.println s!"  - {site.chapters.size} chapters"
 
   return 0
 
