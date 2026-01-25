@@ -1002,15 +1002,16 @@ def replacePlaceholders (proseHtml : String) (nodeLookup : Std.HashMap String No
       -- Check if it starts with the expected closing
       if afterLabel.startsWith "></div>" then
         let afterPlaceholder := afterLabel.drop "></div>".length
-        -- Look up and render the node
-        match nodeLookup[label]? with
+        -- Look up and render the node (normalize label: colons become hyphens during artifact loading)
+        let normalizedLabel := label.replace ":" "-"
+        match nodeLookup[normalizedLabel]? with
         | some nodeInfo =>
           let nodeHtml ← renderNode nodeInfo
           let nodeHtmlStr := nodeHtml.asString
           result := result ++ nodeHtmlStr ++ afterPlaceholder
         | none =>
-          -- Node not found, insert warning
-          let warningHtml := s!"<div class=\"node-not-found\">Node '{label}' not found</div>"
+          -- Node not found, insert warning (show original label for clarity)
+          let warningHtml := s!"<div class=\"node-not-found\">Node '{label}' (normalized: '{normalizedLabel}') not found</div>"
           result := result ++ warningHtml ++ afterPlaceholder
       else
         -- Malformed placeholder, preserve original
