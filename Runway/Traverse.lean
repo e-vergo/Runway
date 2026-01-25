@@ -184,7 +184,7 @@ private def extractBetween (content : String) (startMarker : String) (endMarker 
   let afterStart := parts[1]!
   let endParts := afterStart.splitOn endMarker
   if endParts.isEmpty then return none
-  return some endParts[0]!.trim
+  return some endParts[0]!.trimAscii.toString
 
 /-- Strip \uses{...} commands from LaTeX text -/
 private def stripUsesCommand (content : String) : String := Id.run do
@@ -206,7 +206,7 @@ private def stripUsesCommand (content : String) : String := Id.run do
       else endIdx := endIdx + 1  -- Include the closing }
     let afterClosingBrace := afterUses.drop endIdx
     result := beforeUses ++ afterClosingBrace
-  return result.trim
+  return result.trimAscii.toString
 
 /-- Parse a decl.tex file and extract artifact data -/
 def parseDeclTex (content : String) : DeclArtifact := Id.run do

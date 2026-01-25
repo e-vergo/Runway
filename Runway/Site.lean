@@ -120,6 +120,8 @@ structure NodeInfo where
   uses : Array String
   /-- URL to this node's section in the HTML -/
   url : String
+  /-- Display number in chapter.section.item format (e.g., "4.1.1") -/
+  displayNumber : Option String := none
   deriving Inhabited, Repr
 
 instance : ToJson NodeInfo where
@@ -139,7 +141,8 @@ instance : ToJson NodeInfo where
     ("hoverData", match n.hoverData with | some h => .str h | none => .null),
     ("declNames", .arr (n.declNames.map fun name => .str name.toString)),
     ("uses", .arr (n.uses.map .str)),
-    ("url", .str n.url)
+    ("url", .str n.url),
+    ("displayNumber", match n.displayNumber with | some d => .str d | none => .null)
   ]
 
 instance : FromJson NodeInfo where
@@ -162,7 +165,8 @@ instance : FromJson NodeInfo where
     let declNames := declNamesJson.map (·.toName)
     let uses ← j.getObjValAs? (Array String) "uses" <|> pure #[]
     let url ← j.getObjValAs? String "url" <|> pure ""
-    return { label, title, envType, status, statementHtml, proofHtml, signatureHtml, proofBodyHtml, hoverData, declNames, uses, url }
+    let displayNumber := (j.getObjValAs? String "displayNumber").toOption
+    return { label, title, envType, status, statementHtml, proofHtml, signatureHtml, proofBodyHtml, hoverData, declNames, uses, url, displayNumber }
 
 /-- A page in the blueprint site -/
 structure SitePage where

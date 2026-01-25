@@ -173,7 +173,7 @@ def renderDeclLinks (names : Array Name) (docgen4Url : Option String) : RenderM 
 
 /-- Render a single blueprint node (plasTeX side-by-side layout) -/
 def renderNode (node : NodeInfo) : RenderM Html := do
-  let config ← Render.getConfig
+  let _config ← Render.getConfig
   let _ ← Render.registerHtmlId node.label
 
   -- Status indicator character
@@ -183,17 +183,24 @@ def renderNode (node : NodeInfo) : RenderM Html := do
     | .stated => "○"
     | .notReady => "✗"
 
+  -- Determine what to display as the label: displayNumber if available, otherwise title or label
+  let displayLabel := match node.displayNumber with
+    | some num => num
+    | none => node.title.getD node.label
+
   -- Left column: LaTeX statement and proof
+  -- Use type-specific CSS classes: definition_thmheading, theorem_thmheading, lemma_thmheading, etc.
+  let envTypeLower := node.envType.toLower
   let latexColumn := divClass "sbs-latex-column" (
-    -- Theorem heading
-    divClass "theorem_thmheading" (
-      spanClass "theorem_thmcaption" (Html.text true node.envType.capitalize) ++
+    -- Theorem heading with type-specific class
+    divClass s!"{envTypeLower}_thmheading" (
+      spanClass s!"{envTypeLower}_thmcaption" (Html.text true node.envType.capitalize) ++
       Html.text true " " ++
-      spanClass "theorem_thmlabel" (Html.text true (node.title.getD node.label)) ++
+      spanClass s!"{envTypeLower}_thmlabel" (Html.text true displayLabel) ++
       divClass "thm_header_extras" (Html.text true statusChar)
     ) ++
-    -- Statement content
-    divClass "theorem_thmcontent" (
+    -- Statement content with type-specific class
+    divClass s!"{envTypeLower}_thmcontent" (
       .tag "p" #[] (Html.text false node.statementHtml)
     ) ++
     -- Proof (collapsible)
@@ -251,10 +258,10 @@ def renderNode (node : NodeInfo) : RenderM Html := do
   )
 
   -- Main container with plasTeX-compatible classes
-  let envClass := s!"theorem-style-{node.envType.toLower}"
+  let envClass := s!"theorem-style-{envTypeLower}"
   return .tag "div" #[
     ("id", node.label),
-    ("class", s!"{node.envType.toLower}_thmwrapper sbs-container {envClass}")
+    ("class", s!"{envTypeLower}_thmwrapper sbs-container {envClass}")
   ] (latexColumn ++ leanColumn)
 
 /-! ## Page Rendering -/

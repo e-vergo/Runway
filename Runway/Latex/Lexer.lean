@@ -37,7 +37,7 @@ def isEof : LexerM Bool := do
 /-- Get character at byte position -/
 private def getCharAt (source : String) (pos : Nat) : Option Char :=
   if pos >= source.utf8ByteSize then none
-  else some (source.get ⟨pos⟩)
+  else some (String.Pos.Raw.get source ⟨pos⟩)
 
 /-- Peek at the current character without consuming it -/
 def peek : LexerM (Option Char) := do

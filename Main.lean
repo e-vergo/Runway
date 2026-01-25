@@ -30,7 +30,7 @@ Commands:
 namespace Runway.CLI
 
 open System (FilePath)
-open Std (HashMap)
+open Std (HashMap HashSet)
 open Runway (loadDepGraph loadDeclArtifacts DeclArtifact)
 open Runway.Latex (parseFile extractChapters extractSections extractModuleRefs extractNodeRefs toHtml)
 
@@ -282,6 +282,54 @@ def loadBlueprintChapters (config : Config) (allNodes : Array NodeInfo) : IO (Ar
 
     return chapters
 
+/-- Assign display numbers to nodes based on their position in chapters/sections.
+    Format: ChapterNum.SectionNum.ItemNum (e.g., "4.1.1", "4.1.2", "4.2.1")
+    If a node appears in chapter prose (not in a section), uses ChapterNum.ItemNum.
+    Nodes not found in any chapter get no display number. -/
+def assignDisplayNumbers (nodes : Array NodeInfo) (chapters : Array ChapterInfo) : Array NodeInfo := Id.run do
+  -- Build a mutable map from label to position info
+  let mut labelToNumber : HashMap String String := {}
+
+  for chapter in chapters do
+    let chapterNum := chapter.number
+    -- Track item count for chapter-level nodes (not in any section)
+    let mut chapterItemCount : Nat := 0
+
+    -- Process sections first
+    for sec in chapter.sections do
+      match sec.number with
+      | some secNum =>
+        -- Numbered section: items are ChapterNum.SecNum.ItemNum
+        let mut sectionItemCount : Nat := 0
+        for nodeLabel in sec.nodeLabels do
+          sectionItemCount := sectionItemCount + 1
+          let displayNum := s!"{chapterNum}.{secNum}.{sectionItemCount}"
+          labelToNumber := labelToNumber.insert nodeLabel displayNum
+      | none =>
+        -- Unnumbered section: skip numbering its items
+        pure ()
+
+    -- Process chapter-level nodes (in chapter.nodeLabels but not in any section)
+    -- These are nodes referenced at chapter level, not within sections
+    let sectionLabels : Std.HashSet String := Id.run do
+      let mut s : Std.HashSet String := {}
+      for sec in chapter.sections do
+        for label in sec.nodeLabels do
+          s := s.insert label
+      return s
+
+    for nodeLabel in chapter.nodeLabels do
+      if !sectionLabels.contains nodeLabel && !labelToNumber.contains nodeLabel then
+        chapterItemCount := chapterItemCount + 1
+        let displayNum := s!"{chapterNum}.{chapterItemCount}"
+        labelToNumber := labelToNumber.insert nodeLabel displayNum
+
+  -- Apply display numbers to nodes
+  return nodes.map fun node =>
+    match labelToNumber.get? node.label with
+    | some num => { node with displayNumber := some num }
+    | none => node
+
 /-- Build a BlueprintSite from Dress artifacts -/
 def buildSiteFromArtifacts (config : Config) (dressedDir : FilePath) : IO BlueprintSite := do
   -- Load the dependency graph
@@ -361,9 +409,12 @@ def buildSiteFromArtifacts (config : Config) (dressedDir : FilePath) : IO Bluepr
   -- Load chapters from blueprint.tex if configured
   let chapters ← loadBlueprintChapters config finalNodes
 
+  -- Assign display numbers to nodes based on chapter/section structure
+  let numberedNodes := assignDisplayNumbers finalNodes chapters
+
   return {
     config := config
-    nodes := finalNodes
+    nodes := numberedNodes
     depGraph := depGraph
     pages := #[]
     depGraphSvg := depGraphSvg
