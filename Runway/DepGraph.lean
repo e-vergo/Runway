@@ -102,4 +102,231 @@ def graphSection (svg : Option String) (json : Option String) : Html :=
     embedGraph svg json
   )
 
+/-- Create a graph section for the home page with a link to the full page -/
+def graphSectionWithLink (svg : Option String) (json : Option String) (toRoot : String) : Html :=
+  .tag "section" #[("class", "graph-section"), ("id", "dependency-graph")] (
+    .tag "div" #[("class", "graph-header")] (
+      .tag "h2" #[] (.text true "Dependency Graph") ++
+      .tag "a" #[("href", s!"{toRoot}dep_graph.html"), ("class", "graph-fullpage-link")]
+        (.text true "View Full Page")
+    ) ++
+    embedGraph svg json
+  )
+
+/-- Create the legend for the dependency graph -/
+private def graphLegend : Html :=
+  .tag "div" #[("id", "Legend"), ("class", "graph-legend")] (
+    .tag "span" #[("id", "legend_title"), ("class", "title")] (
+      .text true "Legend" ++
+      .tag "div" #[("class", "btn")] (
+        .tag "div" #[("class", "bar")] Html.empty ++
+        .tag "div" #[("class", "bar")] Html.empty ++
+        .tag "div" #[("class", "bar")] Html.empty
+      )
+    ) ++
+    .tag "dl" #[("class", "legend")] (
+      .tag "dt" #[] (.text true "Boxes") ++
+      .tag "dd" #[] (.text true "definitions") ++
+      .tag "dt" #[] (.text true "Ellipses") ++
+      .tag "dd" #[] (.text true "theorems and lemmas") ++
+      .tag "dt" #[] (.text true "Blue border") ++
+      .tag "dd" #[] (
+        .text true "the " ++
+        .tag "em" #[] (.text true "statement") ++
+        .text true " of this result is ready to be formalized; all prerequisites are done"
+      ) ++
+      .tag "dt" #[] (.text true "Orange border") ++
+      .tag "dd" #[] (
+        .text true "the " ++
+        .tag "em" #[] (.text true "statement") ++
+        .text true " of this result is not ready to be formalized; the blueprint needs more work"
+      ) ++
+      .tag "dt" #[] (.text true "Blue background") ++
+      .tag "dd" #[] (
+        .text true "the " ++
+        .tag "em" #[] (.text true "proof") ++
+        .text true " of this result is ready to be formalized; all prerequisites are done"
+      ) ++
+      .tag "dt" #[] (.text true "Green border") ++
+      .tag "dd" #[] (
+        .text true "the " ++
+        .tag "em" #[] (.text true "statement") ++
+        .text true " of this result is formalized"
+      ) ++
+      .tag "dt" #[] (.text true "Green background") ++
+      .tag "dd" #[] (
+        .text true "the " ++
+        .tag "em" #[] (.text true "proof") ++
+        .text true " of this result is formalized"
+      ) ++
+      .tag "dt" #[] (.text true "Dark green background") ++
+      .tag "dd" #[] (
+        .text true "the " ++
+        .tag "em" #[] (.text true "proof") ++
+        .text true " of this result and all its ancestors are formalized"
+      ) ++
+      .tag "dt" #[] (.text true "Dark green border") ++
+      .tag "dd" #[] (.text true "this is in Mathlib")
+    )
+  )
+
+/-- Embed SVG in a full-viewport container for the dedicated page -/
+def embedFullPageGraph (svg : Option String) (json : Option String) : Html :=
+  let svgHtml := match svg with
+    | some s =>
+      .tag "div" #[("class", "dep-graph-container dep-graph-fullpage")] (
+        graphToolbar ++
+        .tag "div" #[("class", "dep-graph-viewport"), ("id", "dep-graph-viewport"),
+                     ("style", "height: 90vh;")] (
+          .tag "div" #[("class", "dep-graph-svg"), ("id", "dep-graph")] (
+            Html.text false s
+          )
+        )
+      )
+    | none => .tag "div" #[("class", "dep-graph-container"), ("id", "dep-graph")]
+        (.tag "p" #[("class", "dep-graph-placeholder")]
+          (.text true "Dependency graph not available. Run Dress to generate."))
+  let jsonHtml := match json with
+    | some j => embedJsonData j
+    | none => Html.empty
+  jsonHtml ++ svgHtml
+
+/-! ## Node Modal Generation -/
+
+/-- Structure to hold node information for modal generation -/
+structure NodeInfo where
+  id : String
+  label : String
+  envType : String  -- "theorem", "definition", "lemma", etc.
+  url : String
+  deriving Inhabited
+
+/-- Extract a quoted string value after a key like "key": "value" -/
+private def extractStringValue (s : String) (key : String) : Option String :=
+  let keyPattern := s!"\"{key}\":"
+  let parts := s.splitOn keyPattern
+  if parts.length < 2 then none
+  else
+    let afterKey := parts[1]!
+    -- Find the first quote after the key
+    let quoteIdx := afterKey.splitOn "\""
+    -- Pattern: whitespace, quote, value, quote
+    -- After splitting on ", we get: [whitespace, value, rest...]
+    if quoteIdx.length < 2 then none
+    else some quoteIdx[1]!
+
+/-- Parse a single node object from a JSON fragment -/
+private def parseOneNode (fragment : String) : Option NodeInfo := do
+  let id ← extractStringValue fragment "id"
+  let label := (extractStringValue fragment "label").getD id
+  let envType := (extractStringValue fragment "envType").getD "theorem"
+  let url := (extractStringValue fragment "url").getD s!"#{id}"
+  some { id, label, envType, url }
+
+/-- Parse the JSON data to extract node information -/
+def parseNodeInfo (json : String) : List NodeInfo :=
+  -- Split by "id": to find each node-like fragment
+  let parts := json.splitOn "\"id\":"
+  -- Skip the first part (before any "id":)
+  let nodeParts := parts.drop 1
+  -- Try to parse each fragment, keeping successes
+  nodeParts.filterMap fun part => parseOneNode ("\"id\":" ++ part)
+
+/-- Capitalize the first letter of a string -/
+def capitalize (s : String) : String :=
+  if s.isEmpty then s
+  else
+    let chars := s.toList
+    match chars with
+    | [] => s
+    | c :: rest => String.ofList (c.toUpper :: rest)
+
+/-- Generate a single modal for a node -/
+def generateNodeModal (node : NodeInfo) : Html :=
+  let envCapitalized := capitalize node.envType
+  .tag "div" #[("class", "dep-modal-container"), ("id", s!"{node.id}_modal"), ("style", "display:none;")] (
+    .tag "div" #[("class", "dep-modal-content")] (
+      .tag "span" #[("class", "dep-closebtn")] (Html.text true "×") ++
+      .tag "div" #[("class", "dep-modal-body")] (
+        .tag "div" #[("class", "dep-modal-header")] (
+          .tag "span" #[("class", "dep-modal-type")] (Html.text true envCapitalized) ++
+          .tag "span" #[("class", "dep-modal-label")] (Html.text true s!" {node.label}")
+        ) ++
+        .tag "div" #[("class", "dep-modal-links")] (
+          .tag "a" #[("class", "latex_link"), ("href", node.url)] (Html.text true "View in Blueprint")
+        )
+      )
+    )
+  )
+
+/-- Generate the #statements container with all node modals -/
+def generateStatementsContainer (json : Option String) : Html :=
+  match json with
+  | none => .tag "div" #[("id", "statements"), ("style", "display:none;")] Html.empty
+  | some j =>
+    let nodes := parseNodeInfo j
+    let modals := nodes.map generateNodeModal
+    let combined := modals.foldl (· ++ ·) Html.empty
+    .tag "div" #[("id", "statements"), ("style", "display:none;")] combined
+
+/-! ## Full Page Generation -/
+
+/-- Create a full HTML page for the dependency graph -/
+def fullPageGraph (svg : Option String) (json : Option String) (_projectTitle : String)
+    (cssPath : String := "runway.css") (jsPath : String := "runway.js") : Html :=
+  let mathjaxConfig := .tag "script" #[] (Html.text false r#"
+    MathJax = {
+      tex: {
+        inlineMath: [['$', '$'], ['\\(', '\\)']],
+        displayMath: [['$$', '$$'], ['\\[', '\\]']],
+        processEscapes: true
+      },
+      options: {
+        skipHtmlTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code']
+      }
+    };
+  "#)
+
+  .tag "html" #[("lang", "en")] (
+    .tag "head" #[] (
+      .tag "meta" #[("charset", "UTF-8")] Html.empty ++
+      .tag "meta" #[("name", "viewport"), ("content", "width=device-width, initial-scale=1")] Html.empty ++
+      .tag "title" #[] (Html.text true "Dependency Graph") ++
+      .tag "link" #[("rel", "stylesheet"), ("href", cssPath)] Html.empty ++
+      .tag "link" #[("rel", "icon"), ("href", "data:,")] Html.empty ++
+      mathjaxConfig ++
+      .tag "script" #[("id", "MathJax-script"), ("async", ""),
+                      ("src", "https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js")] Html.empty ++
+      .tag "script" #[("src", "https://unpkg.com/@popperjs/core@2")] Html.empty ++
+      .tag "script" #[("src", "https://unpkg.com/tippy.js@6")] Html.empty ++
+      .tag "link" #[("rel", "stylesheet"),
+                    ("href", "https://unpkg.com/tippy.js@6/themes/light-border.css")] Html.empty
+    ) ++
+    .tag "body" #[("class", "dep-graph-page")] (
+      -- Header matching plasTeX style
+      .tag "header" #[] (
+        .tag "nav" #[("class", "header")] (
+          .tag "div" #[("class", "nav-wrapper")] (
+            .tag "a" #[("class", "toc"), ("href", "index.html")] (Html.text true "Home") ++
+            .tag "h1" #[("id", "doc_title")] (Html.text true "Dependencies")
+          )
+        )
+      ) ++
+      -- Main content wrapper
+      .tag "div" #[("class", "wrapper")] (
+        .tag "div" #[("class", "content")] (
+          graphLegend ++
+          embedFullPageGraph svg json ++
+          -- Hidden modal containers for node details
+          generateStatementsContainer json
+        )
+      ) ++
+      -- Scripts
+      .tag "script" #[("src", "https://code.jquery.com/jquery-3.7.1.min.js"),
+                      ("integrity", "sha256-/JqT3SQfawRcv/BIHPThkBvs0OEvtFFmqPF/lYI/Cxo="),
+                      ("crossorigin", "anonymous")] Html.empty ++
+      .tag "script" #[("src", jsPath)] Html.empty
+    )
+  )
+
 end Runway.DepGraph

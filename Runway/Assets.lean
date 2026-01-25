@@ -874,9 +874,11 @@ nav.toc li.active a {
 
 .dep-graph-viewport {
   width: 100%;
-  height: 500px;
-  overflow: hidden;
+  min-height: 200px;
+  max-height: 600px;
+  overflow: auto;
   cursor: grab;
+  background: #ffffff;  /* Explicit white to match SVG background */
 }
 
 .dep-graph-viewport:active {
@@ -886,10 +888,12 @@ nav.toc li.active a {
 .dep-graph-svg {
   transform-origin: 0 0;
   transition: transform 0.05s ease-out;
+  display: inline-block;  /* Shrink-wrap to SVG size */
 }
 
 .dep-graph-svg svg {
   display: block;
+  background: #ffffff;  /* Ensure SVG has white background */
 }
 
 .dep-graph-placeholder {
@@ -957,6 +961,200 @@ pre.lean-code {
 .math.display {
   overflow-x: auto;
   padding: 1rem 0;
+}
+
+/* ========== Full-page Graph Styles ========== */
+.dep-graph-page {
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.dep-graph-page .wrapper {
+  flex: 1;
+  display: flex;
+  overflow: hidden;
+}
+
+.dep-graph-page .content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  padding: 1rem;
+}
+
+.dep-graph-fullpage {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+.dep-graph-fullpage .dep-graph-viewport {
+  flex: 1;
+  height: 90vh !important;
+  max-height: none;
+}
+
+/* Graph header with link to full page */
+.graph-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1rem;
+}
+
+.graph-header h2 {
+  margin: 0;
+}
+
+.graph-fullpage-link {
+  color: var(--bp-primary);
+  text-decoration: none;
+  font-size: 0.875rem;
+  padding: 0.25rem 0.75rem;
+  border: 1px solid var(--bp-border);
+  border-radius: 4px;
+  transition: background-color 0.2s;
+}
+
+.graph-fullpage-link:hover {
+  background-color: var(--bp-bg-alt);
+  text-decoration: none;
+}
+
+/* Graph legend styling */
+.graph-legend {
+  margin-bottom: 1rem;
+  padding: 1rem;
+  background: var(--bp-bg-alt);
+  border: 1px solid var(--bp-border);
+  border-radius: 8px;
+}
+
+.graph-legend .title {
+  display: flex;
+  align-items: center;
+  font-weight: bold;
+  cursor: pointer;
+  margin-bottom: 0.5rem;
+}
+
+.graph-legend .btn {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-left: 0.5rem;
+  padding: 3px;
+}
+
+.graph-legend .bar {
+  width: 18px;
+  height: 2px;
+  background: var(--bp-text);
+}
+
+.graph-legend dl.legend {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 0.25rem 1rem;
+  margin: 0;
+  padding: 0;
+  font-size: 0.875rem;
+}
+
+.graph-legend dt {
+  font-weight: 600;
+  color: var(--bp-text);
+}
+
+.graph-legend dd {
+  margin: 0;
+  color: var(--bp-text-muted);
+}
+
+/* ========== Dependency Graph Modal Styles ========== */
+.dep-modal-container {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.4);
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.dep-modal-content {
+  background: white;
+  padding: 20px;
+  width: 60%;
+  max-width: 600px;
+  border-radius: 8px;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+  position: relative;
+}
+
+.dep-closebtn {
+  position: absolute;
+  top: 10px;
+  right: 15px;
+  font-size: 24px;
+  cursor: pointer;
+  color: #666;
+  line-height: 1;
+}
+
+.dep-closebtn:hover {
+  color: #000;
+}
+
+.dep-modal-body {
+  padding-top: 10px;
+}
+
+.dep-modal-header {
+  margin-bottom: 1rem;
+  padding-bottom: 0.5rem;
+  border-bottom: 1px solid var(--bp-border);
+}
+
+.dep-modal-type {
+  font-weight: bold;
+  color: var(--bp-primary);
+}
+
+.dep-modal-label {
+  color: var(--bp-text);
+}
+
+.dep-modal-links {
+  margin-top: 1rem;
+}
+
+.dep-modal-links a {
+  color: var(--bp-primary);
+  text-decoration: none;
+  padding: 0.5rem 1rem;
+  border: 1px solid var(--bp-border);
+  border-radius: 4px;
+  display: inline-block;
+}
+
+.dep-modal-links a:hover {
+  background-color: var(--bp-bg-alt);
+}
+
+/* SVG node click styling */
+.dep-graph-svg .node {
+  cursor: pointer;
+}
+
+.dep-graph-svg .node:hover polygon,
+.dep-graph-svg .node:hover ellipse {
+  stroke-width: 3;
 }
 "#
 
@@ -1232,21 +1430,192 @@ window.addEventListener('DOMContentLoaded', () => {
     }
 });
 
-// Sync Lean proof body visibility with LaTeX proof toggle
+// Sync Lean proof body visibility with LaTeX proof toggle using jQuery animations
 document.addEventListener('DOMContentLoaded', function() {
     document.querySelectorAll('.sbs-container').forEach(function(container) {
-        var expandIcon = container.querySelector('.expand-proof');
+        var proofHeading = container.querySelector('.proof_heading');
         var leanProofBody = container.querySelector('.lean-proof-body');
 
-        if (!expandIcon || !leanProofBody) return;
+        if (!proofHeading || !leanProofBody) return;
 
-        // Watch for plastex.js changing the expand icon text
-        var observer = new MutationObserver(function() {
-            var isExpanded = expandIcon.textContent.trim() === '▼';
-            leanProofBody.style.display = isExpanded ? 'inline' : 'none';
+        // Listen for clicks on the proof heading
+        proofHeading.addEventListener('click', function() {
+            // Read icon state after plastex.js has toggled it (setTimeout for timing)
+            setTimeout(function() {
+                var icon = container.querySelector('.expand-proof');
+                var isCollapsed = icon && icon.textContent.trim() === '▶';
+                // Use jQuery slideUp/slideDown to match LaTeX proof animation
+                if (isCollapsed) {
+                    $(leanProofBody).slideUp(300);
+                } else {
+                    $(leanProofBody).slideDown(300);
+                }
+            }, 50);
         });
+    });
+});
 
-        observer.observe(expandIcon, { childList: true, characterData: true, subtree: true });
+// Dependency graph pan/zoom controls
+document.addEventListener('DOMContentLoaded', function() {
+    var viewport = document.getElementById('dep-graph-viewport');
+    var svgContainer = document.getElementById('dep-graph');
+    if (!viewport || !svgContainer) return;
+
+    var svg = svgContainer.querySelector('svg');
+    if (!svg) return;
+
+    var scale = 1;
+    var translateX = 0;
+    var translateY = 0;
+    var isDragging = false;
+    var startX, startY;
+
+    function updateTransform() {
+        svgContainer.style.transform = 'translate(' + translateX + 'px, ' + translateY + 'px) scale(' + scale + ')';
+    }
+
+    function resetView() {
+        scale = 1;
+        translateX = 0;
+        translateY = 0;
+        updateTransform();
+    }
+
+    function fitToWindow() {
+        var viewportRect = viewport.getBoundingClientRect();
+        var svgWidth = parseFloat(svg.getAttribute('width')) || svg.viewBox.baseVal.width;
+        var svgHeight = parseFloat(svg.getAttribute('height')) || svg.viewBox.baseVal.height;
+
+        var scaleX = (viewportRect.width - 20) / svgWidth;
+        var scaleY = (viewportRect.height - 20) / svgHeight;
+        scale = Math.min(scaleX, scaleY, 1);  // Don't scale up, only down
+
+        translateX = (viewportRect.width - svgWidth * scale) / 2;
+        translateY = 10;
+        updateTransform();
+    }
+
+    // Zoom buttons
+    var zoomIn = document.getElementById('graph-zoom-in');
+    var zoomOut = document.getElementById('graph-zoom-out');
+    var resetBtn = document.getElementById('graph-reset');
+    var fitBtn = document.getElementById('graph-fit');
+
+    if (zoomIn) {
+        zoomIn.addEventListener('click', function() {
+            scale = Math.min(scale * 1.2, 3);
+            updateTransform();
+        });
+    }
+
+    if (zoomOut) {
+        zoomOut.addEventListener('click', function() {
+            scale = Math.max(scale / 1.2, 0.3);
+            updateTransform();
+        });
+    }
+
+    if (resetBtn) {
+        resetBtn.addEventListener('click', resetView);
+    }
+
+    if (fitBtn) {
+        fitBtn.addEventListener('click', fitToWindow);
+    }
+
+    // Mouse wheel zoom
+    viewport.addEventListener('wheel', function(e) {
+        e.preventDefault();
+        var delta = e.deltaY > 0 ? 0.9 : 1.1;
+        scale = Math.max(0.3, Math.min(3, scale * delta));
+        updateTransform();
+    }, { passive: false });
+
+    // Pan with mouse drag
+    viewport.addEventListener('mousedown', function(e) {
+        if (e.button !== 0) return;  // Only left click
+        isDragging = true;
+        startX = e.clientX - translateX;
+        startY = e.clientY - translateY;
+        viewport.style.cursor = 'grabbing';
+    });
+
+    document.addEventListener('mousemove', function(e) {
+        if (!isDragging) return;
+        translateX = e.clientX - startX;
+        translateY = e.clientY - startY;
+        updateTransform();
+    });
+
+    document.addEventListener('mouseup', function() {
+        isDragging = false;
+        viewport.style.cursor = 'grab';
+    });
+
+    // Initial fit
+    fitToWindow();
+});
+
+// Dependency graph node click modal handling
+document.addEventListener('DOMContentLoaded', function() {
+    // Helper to escape special characters in label for CSS selector
+    function escapeLabel(label) {
+        return label.replace(/\./g, '\\.').replace(/:/g, '\\:');
+    }
+
+    // Add click handlers to SVG nodes
+    var svgContainer = document.getElementById('dep-graph');
+    if (!svgContainer) return;
+
+    var nodes = svgContainer.querySelectorAll('.node');
+    nodes.forEach(function(node) {
+        node.style.cursor = 'pointer';
+        node.addEventListener('click', function(e) {
+            e.stopPropagation();
+            // Get the node id from the title element
+            var titleEl = node.querySelector('title');
+            if (!titleEl) return;
+            var nodeId = titleEl.textContent.trim();
+
+            // Hide all modals first
+            var allModals = document.querySelectorAll('.dep-modal-container');
+            allModals.forEach(function(m) { m.style.display = 'none'; });
+
+            // Show the corresponding modal
+            var modalId = escapeLabel(nodeId) + '_modal';
+            var modal = document.getElementById(nodeId + '_modal');
+            if (modal) {
+                modal.style.display = 'flex';
+            }
+        });
+    });
+
+    // Close button handlers
+    document.querySelectorAll('.dep-closebtn').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+            var modal = btn.closest('.dep-modal-container');
+            if (modal) {
+                modal.style.display = 'none';
+            }
+        });
+    });
+
+    // Close modal when clicking outside content
+    document.querySelectorAll('.dep-modal-container').forEach(function(modal) {
+        modal.addEventListener('click', function(e) {
+            if (e.target === modal) {
+                modal.style.display = 'none';
+            }
+        });
+    });
+
+    // Close modal on Escape key
+    document.addEventListener('keydown', function(e) {
+        if (e.key === 'Escape') {
+            document.querySelectorAll('.dep-modal-container').forEach(function(modal) {
+                modal.style.display = 'none';
+            });
+        }
     });
 });
 "#

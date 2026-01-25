@@ -679,6 +679,12 @@ def renderSidebar (chapters : Array ChapterInfo) (currentSlug : Option String) (
     .tag "a" #[("href", s!"{toRoot}index.html")] (Html.text true "Blueprint Home")
   )
 
+  -- Dependency graph link
+  let graphClass := if currentSlug == some "dep_graph" then "active" else ""
+  let graphItem := .tag "li" #[("class", graphClass)] (
+    .tag "a" #[("href", s!"{toRoot}dep_graph.html")] (Html.text true "Dependency Graph")
+  )
+
   let chapterItems := chapters.map fun chapter =>
     let isActive := currentSlug == some chapter.slug
     let itemClass := if isActive then "active" else ""
@@ -690,7 +696,7 @@ def renderSidebar (chapters : Array ChapterInfo) (currentSlug : Option String) (
 
   .tag "nav" #[("class", "toc")] (
     .tag "ul" #[("class", "sub-toc-0")] (
-      homeItem ++ .seq chapterItems
+      homeItem ++ graphItem ++ .seq chapterItems
     )
   )
 
@@ -965,6 +971,11 @@ def generateSite (theme : Theme) (site : BlueprintSite) (outputDir : System.File
   let htmlStr := Html.doctype ++ "\n" ++ html.asString
   IO.FS.writeFile (outputDir / "index.html") htmlStr
 
+  -- Generate dedicated dependency graph page
+  let depGraphPage := DepGraph.fullPageGraph site.depGraphSvg site.depGraphJson site.config.title
+  let depGraphHtmlStr := Html.doctype ++ "\n" ++ depGraphPage.asString
+  IO.FS.writeFile (outputDir / "dep_graph.html") depGraphHtmlStr
+
   -- Write theme assets
   theme.writeAssets outputDir
 
@@ -1079,8 +1090,8 @@ def renderMultiPageIndex (site : BlueprintSite) : RenderM Html := do
   -- Progress section
   let progress := renderProgress site
 
-  -- Dependency graph section
-  let graphSection := DepGraph.graphSection site.depGraphSvg site.depGraphJson
+  -- Dependency graph section (with link to full page)
+  let graphSection := DepGraph.graphSectionWithLink site.depGraphSvg site.depGraphJson ""
 
   -- Chapter list
   let chapterList := divClass "chapter-list" (
@@ -1132,6 +1143,12 @@ def generateMultiPageSite (theme : Theme) (site : BlueprintSite) (outputDir : Sy
     let chapterHtmlStr := Html.doctype ++ "\n" ++ chapterHtml.asString
     IO.FS.writeFile (outputDir / s!"{chap.slug}.html") chapterHtmlStr
     IO.println s!"  Generated {chap.slug}.html"
+
+  -- Generate dedicated dependency graph page
+  let depGraphPage := DepGraph.fullPageGraph site.depGraphSvg site.depGraphJson site.config.title
+  let depGraphHtmlStr := Html.doctype ++ "\n" ++ depGraphPage.asString
+  IO.FS.writeFile (outputDir / "dep_graph.html") depGraphHtmlStr
+  IO.println s!"  Generated dep_graph.html"
 
   -- Write theme assets
   theme.writeAssets outputDir
