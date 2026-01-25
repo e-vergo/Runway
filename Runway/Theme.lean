@@ -970,18 +970,71 @@ def generateSite (theme : Theme) (site : BlueprintSite) (outputDir : System.File
 
   IO.println s!"Site generated at {outputDir}"
 
+/-- Build a lookup map from node label to NodeInfo -/
+def buildNodeLookup (nodes : Array NodeInfo) : Std.HashMap String NodeInfo :=
+  nodes.foldl (init := {}) fun acc node =>
+    acc.insert node.label node
+
+/-- Replace placeholder divs with rendered node HTML.
+    Finds `<div class="lean-node-placeholder" data-node="X"></div>` and replaces with rendered node.
+    Uses splitOn for reliable parsing.
+-/
+def replacePlaceholders (proseHtml : String) (nodeLookup : Std.HashMap String NodeInfo)
+    : RenderM String := do
+  let placeholderPrefix := "<div class=\"lean-node-placeholder\" data-node=\""
+
+  -- Split by the placeholder prefix
+  let parts := proseHtml.splitOn placeholderPrefix
+
+  -- First part is always before any placeholder
+  if parts.isEmpty then return proseHtml
+
+  let mut result := parts[0]!
+
+  -- Process remaining parts (each starts with: LABEL"></div>rest...)
+  for i in [1:parts.length] do
+    let part := parts[i]!
+    -- Find the closing quote to extract the label
+    match part.splitOn "\"" with
+    | label :: rest =>
+      -- rest[0] should be "></div>" and rest[1..] is the content after
+      let afterLabel := "\"".intercalate rest
+      -- Check if it starts with the expected closing
+      if afterLabel.startsWith "></div>" then
+        let afterPlaceholder := afterLabel.drop "></div>".length
+        -- Look up and render the node
+        match nodeLookup[label]? with
+        | some nodeInfo =>
+          let nodeHtml ← renderNode nodeInfo
+          let nodeHtmlStr := nodeHtml.asString
+          result := result ++ nodeHtmlStr ++ afterPlaceholder
+        | none =>
+          -- Node not found, insert warning
+          let warningHtml := s!"<div class=\"node-not-found\">Node '{label}' not found</div>"
+          result := result ++ warningHtml ++ afterPlaceholder
+      else
+        -- Malformed placeholder, preserve original
+        result := result ++ placeholderPrefix ++ part
+    | [] =>
+      -- Malformed, preserve original
+      result := result ++ placeholderPrefix ++ part
+
+  return result
+
 /-- Render a chapter page content -/
-def renderChapterContent (chapter : ChapterInfo) : RenderM Html := do
+def renderChapterContent (chapter : ChapterInfo) (allNodes : Array NodeInfo) : RenderM Html := do
+  -- Build node lookup for placeholder resolution
+  let nodeLookup := buildNodeLookup allNodes
+
   -- Chapter title
   let titlePrefix := if chapter.isAppendix then "Appendix" else s!"Chapter {chapter.number}"
   let chapterTitle := .tag "h1" #[("class", "chapter-title")] (
     Html.text true s!"{titlePrefix}: {chapter.title}"
   )
 
-  -- Prose content (with placeholders for nodes converted to actual nodes)
-  let proseHtml := Html.text false chapter.proseHtml
-
-  -- Note: Nodes are rendered separately based on nodeLabels, for now just render prose
+  -- Prose content with placeholders resolved to actual rendered nodes
+  let resolvedProseHtml ← replacePlaceholders chapter.proseHtml nodeLookup
+  let proseHtml := Html.text false resolvedProseHtml
 
   -- Render sections
   let mut sectionHtmls : Array Html := #[]
@@ -990,7 +1043,9 @@ def renderChapterContent (chapter : ChapterInfo) : RenderM Html := do
       | some n => .tag "h2" #[("class", "section-title")] (Html.text true s!"{chapter.number}.{n} {sec.title}")
       | none => .tag "h2" #[("class", "section-title")] (Html.text true sec.title)
 
-    let sectionProseHtml := Html.text false sec.proseHtml
+    -- Section prose with placeholders resolved
+    let resolvedSectionProseHtml ← replacePlaceholders sec.proseHtml nodeLookup
+    let sectionProseHtml := Html.text false resolvedSectionProseHtml
 
     sectionHtmls := sectionHtmls.push (
       divClass "section-wrapper" (
@@ -1070,7 +1125,7 @@ def generateMultiPageSite (theme : Theme) (site : BlueprintSite) (outputDir : Sy
 
   -- Generate chapter pages
   for chap in site.chapters do
-    let (chapterContent, _) ← renderChapterContent chap |>.run ctx
+    let (chapterContent, _) ← renderChapterContent chap site.nodes |>.run ctx
     let chapterTemplate := DefaultTheme.primaryTemplateWithSidebar site.chapters (some chap.slug)
     let (chapterHtml, _) ← chapterTemplate chapterContent |>.run ctx
     let chapterHtmlStr := Html.doctype ++ "\n" ++ chapterHtml.asString
