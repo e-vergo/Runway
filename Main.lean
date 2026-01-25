@@ -227,7 +227,9 @@ def loadBlueprintChapters (config : Config) (allNodes : Array NodeInfo) : IO (Ar
 
       -- Add nodes from direct node references
       for nodeLabel in nodeRefs do
-        match labelToNode.get? nodeLabel with
+        -- Normalize label: colons become hyphens during artifact loading
+        let normalizedLabel := nodeLabel.replace ":" "-"
+        match labelToNode.get? normalizedLabel with
         | some node =>
           -- Avoid duplicates
           if !chapterNodes.any (·.label == node.label) then
@@ -250,7 +252,9 @@ def loadBlueprintChapters (config : Config) (allNodes : Array NodeInfo) : IO (Ar
           | none => pure ()
 
         for nodeLabel in sectionNodeRefs do
-          match labelToNode.get? nodeLabel with
+          -- Normalize label: colons become hyphens during artifact loading
+          let normalizedLabel := nodeLabel.replace ":" "-"
+          match labelToNode.get? normalizedLabel with
           | some node =>
             if !sectionNodes.any (·.label == node.label) then
               sectionNodes := sectionNodes.push node
