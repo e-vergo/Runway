@@ -76,6 +76,12 @@ def renderSidebar (chapters : Array ChapterInfo) (currentSlug : Option String) (
     .tag "a" #[("href", s!"{toRoot}dep_graph.html")] (Html.text true "Dependency Graph")
   )
 
+  -- Paper link
+  let paperClass := if currentSlug == some "paper" then "active" else ""
+  let paperItem := .tag "li" #[("class", paperClass)] (
+    .tag "a" #[("href", s!"{toRoot}paper.html")] (Html.text true "Paper")
+  )
+
   let chapterItems := chapters.map fun chapter =>
     let isActive := currentSlug == some chapter.slug
     let itemClass := if isActive then "active" else ""
@@ -87,7 +93,7 @@ def renderSidebar (chapters : Array ChapterInfo) (currentSlug : Option String) (
 
   .tag "nav" #[("class", "toc")] (
     .tag "ul" #[("class", "sub-toc-0")] (
-      homeItem ++ graphItem ++ .seq chapterItems
+      homeItem ++ graphItem ++ paperItem ++ .seq chapterItems
     )
   )
 

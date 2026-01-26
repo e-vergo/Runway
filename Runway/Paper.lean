@@ -158,6 +158,49 @@ def renderPaperPage (config : Config) (content : Html) : Html :=
 
 /-! ## Document Conversion -/
 
+/-- Convert LaTeX text commands to HTML (for content outside math mode).
+    Handles: \texttt{...} -> <code>...</code>
+    Note: Content inside $...$ or \[...\] is left untouched for MathJax. -/
+partial def latexTextToHtml (s : String) : String :=
+  go s.toList "" false 0
+where
+  go (input : List Char) (acc : String) (inMath : Bool) (braceDepth : Nat) : String :=
+    match input with
+    | [] => acc
+    | '\\' :: 't' :: 'e' :: 'x' :: 't' :: 't' :: 't' :: '{' :: rest =>
+      if inMath then
+        -- Inside math mode, keep as-is
+        go rest (acc ++ "\\texttt{") inMath braceDepth
+      else
+        -- Convert \texttt{ to <code>
+        go rest (acc ++ "<code>") inMath (braceDepth + 1)
+    | '$' :: '$' :: rest =>
+      -- Display math $$ toggles
+      go rest (acc ++ "$$") (!inMath) braceDepth
+    | '$' :: rest =>
+      -- Inline math $ toggles
+      go rest (acc ++ "$") (!inMath) braceDepth
+    | '\\' :: '[' :: rest =>
+      -- Display math \[ starts
+      go rest (acc ++ "\\[") true braceDepth
+    | '\\' :: ']' :: rest =>
+      -- Display math \] ends
+      go rest (acc ++ "\\]") false braceDepth
+    | '\\' :: '(' :: rest =>
+      -- Inline math \( starts
+      go rest (acc ++ "\\(") true braceDepth
+    | '\\' :: ')' :: rest =>
+      -- Inline math \) ends
+      go rest (acc ++ "\\)") false braceDepth
+    | '}' :: rest =>
+      if braceDepth > 0 && !inMath then
+        -- Close a <code> tag
+        go rest (acc ++ "</code>") inMath (braceDepth - 1)
+      else
+        go rest (acc ++ "}") inMath braceDepth
+    | c :: rest =>
+      go rest (acc.push c) inMath braceDepth
+
 /-- Convert NodeStatus to VerificationLevel -/
 def nodeStatusToVerificationLevel (status : NodeStatus) : VerificationLevel :=
   match status with
@@ -170,8 +213,8 @@ def toPaperNodeInfo (node : NodeInfo) (baseUrl : String := "") : PaperNodeInfo :
   { label := node.label
     envType := node.envType
     displayNumber := node.displayNumber.getD node.label
-    statement := node.statementHtml
-    proof := node.proofHtml
+    statement := latexTextToHtml node.statementHtml
+    proof := node.proofHtml.map latexTextToHtml
     status := nodeStatusToVerificationLevel node.status
     blueprintUrl := some (baseUrl ++ "index.html#node-" ++ node.label)
   }
