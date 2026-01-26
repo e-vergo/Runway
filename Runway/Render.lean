@@ -116,17 +116,25 @@ namespace Graph.NodeStatus
 
 /-- Convert NodeStatus to CSS class -/
 def toCssClass : NodeStatus → String
-  | .stated => "stated"
-  | .proved => "proved"
   | .notReady => "not-ready"
-  | .mathLibOk => "mathlib-ok"
+  | .stated => "stated"
+  | .ready => "ready"
+  | .sorry => "sorry"
+  | .proven => "proven"
+  | .fullyProven => "fully-proven"
+  | .mathlibReady => "mathlib-ready"
+  | .inMathlib => "in-mathlib"
 
 /-- Convert NodeStatus to display string -/
 def toDisplayString : NodeStatus → String
-  | .stated => "Stated"
-  | .proved => "Proved"
   | .notReady => "Not Ready"
-  | .mathLibOk => "Mathlib"
+  | .stated => "Stated"
+  | .ready => "Ready"
+  | .sorry => "Has Sorry"
+  | .proven => "Proven"
+  | .fullyProven => "Fully Proven"
+  | .mathlibReady => "Mathlib Ready"
+  | .inMathlib => "In Mathlib"
 
 end Graph.NodeStatus
 
@@ -178,10 +186,14 @@ def renderNode (node : NodeInfo) : RenderM Html := do
 
   -- Status indicator character
   let statusChar := match node.status with
-    | .proved => "✓"
-    | .mathLibOk => "✓"
-    | .stated => "○"
     | .notReady => "✗"
+    | .stated => "○"
+    | .ready => "◐"
+    | .sorry => "!"
+    | .proven => "✓"
+    | .fullyProven => "✓"
+    | .mathlibReady => "✓"
+    | .inMathlib => "✓"
 
   -- Determine what to display as the label: displayNumber if available, otherwise title or label
   let displayLabel := match node.displayNumber with
@@ -292,9 +304,13 @@ def renderProgress (site : BlueprintSite) : Html :=
   )
 
   let stats := divClass "progress-stats" (
-    spanClass "stat proved" (Html.text true s!"{counts.proved} proved") ++
-    spanClass "stat mathlib" (Html.text true s!"{counts.mathLibOk} mathlib") ++
+    spanClass "stat proven" (Html.text true s!"{counts.proven} proven") ++
+    spanClass "stat fully-proven" (Html.text true s!"{counts.fullyProven} fully proven") ++
+    spanClass "stat mathlib-ready" (Html.text true s!"{counts.mathlibReady} mathlib ready") ++
+    spanClass "stat in-mathlib" (Html.text true s!"{counts.inMathlib} in mathlib") ++
+    spanClass "stat sorry" (Html.text true s!"{counts.hasSorry} sorry") ++
     spanClass "stat stated" (Html.text true s!"{counts.stated} stated") ++
+    spanClass "stat ready" (Html.text true s!"{counts.ready} ready") ++
     spanClass "stat not-ready" (Html.text true s!"{counts.notReady} not ready") ++
     spanClass "stat total" (Html.text true s!"{total} total")
   )
@@ -329,16 +345,16 @@ def renderIndex (site : BlueprintSite) : RenderM Html := do
   -- Dependency graph section with embedded SVG (if available)
   let graphSection := DepGraph.graphSection site.depGraphSvg site.depGraphJson
 
-  -- Node list by status
-  let provedNodes := site.nodesByStatus .proved
-  let mathLibNodes := site.nodesByStatus .mathLibOk
+  -- Node list by status (group proven + fullyProven, mathlib ready + in mathlib)
+  let provenNodes := site.nodesByStatus .proven ++ site.nodesByStatus .fullyProven
+  let mathLibNodes := site.nodesByStatus .mathlibReady ++ site.nodesByStatus .inMathlib
   let statedNodes := site.nodesByStatus .stated
 
   let nodeList := divClass "node-lists" (
-    (if provedNodes.isEmpty then Html.empty else
-      divClass "node-list proved" (
-        .tag "h3" #[] (Html.text true "Proved") ++
-        renderNodeList provedNodes
+    (if provenNodes.isEmpty then Html.empty else
+      divClass "node-list proven" (
+        .tag "h3" #[] (Html.text true "Proven") ++
+        renderNodeList provenNodes
       )) ++
     (if mathLibNodes.isEmpty then Html.empty else
       divClass "node-list mathlib" (

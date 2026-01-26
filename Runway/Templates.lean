@@ -126,10 +126,14 @@ def pageFooter (config : Config) : Html :=
 /-- Status badge for a node -/
 def statusBadge (status : Graph.NodeStatus) : Html :=
   let (cls, label) := match status with
-    | .proved => ("badge-proved", "Proved")
-    | .mathLibOk => ("badge-mathlib", "Mathlib")
-    | .stated => ("badge-stated", "Stated")
     | .notReady => ("badge-not-ready", "Not Ready")
+    | .stated => ("badge-stated", "Stated")
+    | .ready => ("badge-ready", "Ready")
+    | .sorry => ("badge-sorry", "Has Sorry")
+    | .proven => ("badge-proven", "Proven")
+    | .fullyProven => ("badge-fully-proven", "Fully Proven")
+    | .mathlibReady => ("badge-mathlib-ready", "Mathlib Ready")
+    | .inMathlib => ("badge-in-mathlib", "In Mathlib")
   spanClass s!"status-badge {cls}" (Html.text true label)
 
 /-- Compact status indicator (colored dot) -/
@@ -180,15 +184,15 @@ def progressByType (site : BlueprintSite) : Html :=
 
   let rows := envTypes.map fun envType =>
     let nodesOfType := site.nodesByEnvType envType
-    let proved := nodesOfType.filter (·.status == .proved)
-    let mathlib := nodesOfType.filter (·.status == .mathLibOk)
+    let proven := nodesOfType.filter fun n => n.status == .proven || n.status == .fullyProven
+    let mathlib := nodesOfType.filter fun n => n.status == .mathlibReady || n.status == .inMathlib
     let total := nodesOfType.size
-    let completed := proved.size + mathlib.size
+    let completed := proven.size + mathlib.size
     let pct := if total == 0 then 0.0 else (completed.toFloat / total.toFloat) * 100.0
 
     .tag "tr" #[] (
       .tag "td" #[] (Html.text true envType.capitalize) ++
-      .tag "td" #[] (Html.text true s!"{proved.size}") ++
+      .tag "td" #[] (Html.text true s!"{proven.size}") ++
       .tag "td" #[] (Html.text true s!"{mathlib.size}") ++
       .tag "td" #[] (Html.text true s!"{total}") ++
       .tag "td" #[] (

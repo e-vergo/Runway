@@ -57,10 +57,14 @@ instance : FromJson NodeStatus where
   fromJson? j := do
     let s ← j.getStr?
     match s with
-    | "stated" => return .stated
-    | "proved" => return .proved
     | "notReady" => return .notReady
-    | "mathLibOk" => return .mathLibOk
+    | "stated" => return .stated
+    | "ready" => return .ready
+    | "sorry" => return .sorry
+    | "proven" => return .proven
+    | "fullyProven" => return .fullyProven
+    | "mathlibReady" => return .mathlibReady
+    | "inMathlib" => return .inMathlib
     | _ => throw s!"Unknown NodeStatus: {s}"
 
 instance : FromJson Node where
@@ -335,7 +339,7 @@ def buildGraphFromArtifacts (artifacts : HashMap String DeclArtifact) : Graph :=
 
   for (key, art) in artifacts.toArray do
     -- Create node
-    let status : NodeStatus := if art.leanOk then .proved else .stated
+    let status : NodeStatus := if art.leanOk then .proven else .stated
     -- Determine env type from label prefix
     let envType :=
       if art.label.startsWith "thm:" || art.label.startsWith "thm-" then "theorem"
@@ -491,20 +495,21 @@ def getNodesByStatus (status : NodeStatus) : TraverseM (Array Node) := do
   let nodes ← getAllNodes
   return nodes.filter (·.status == status)
 
-/-- Count nodes by status -/
-def countNodesByStatus : TraverseM (Nat × Nat × Nat × Nat) := do
+/-- Count nodes by status (returns counts for all 8 statuses) -/
+def countNodesByStatus : TraverseM BlueprintSite.StatusCounts := do
   let nodes ← getAllNodes
-  let mut stated := 0
-  let mut proved := 0
-  let mut notReady := 0
-  let mut mathLibOk := 0
+  let mut counts : BlueprintSite.StatusCounts := { notReady := 0, stated := 0, ready := 0, hasSorry := 0, proven := 0, fullyProven := 0, mathlibReady := 0, inMathlib := 0 }
   for node in nodes do
     match node.status with
-    | .stated => stated := stated + 1
-    | .proved => proved := proved + 1
-    | .notReady => notReady := notReady + 1
-    | .mathLibOk => mathLibOk := mathLibOk + 1
-  return (stated, proved, notReady, mathLibOk)
+    | .notReady => counts := { counts with notReady := counts.notReady + 1 }
+    | .stated => counts := { counts with stated := counts.stated + 1 }
+    | .ready => counts := { counts with ready := counts.ready + 1 }
+    | .sorry => counts := { counts with hasSorry := counts.hasSorry + 1 }
+    | .proven => counts := { counts with proven := counts.proven + 1 }
+    | .fullyProven => counts := { counts with fullyProven := counts.fullyProven + 1 }
+    | .mathlibReady => counts := { counts with mathlibReady := counts.mathlibReady + 1 }
+    | .inMathlib => counts := { counts with inMathlib := counts.inMathlib + 1 }
+  return counts
 
 /-! ## Site Building -/
 

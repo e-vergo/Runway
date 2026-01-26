@@ -130,10 +130,14 @@ instance : ToJson NodeInfo where
     ("title", match n.title with | some t => .str t | none => .null),
     ("envType", .str n.envType),
     ("status", match n.status with
-      | .stated => .str "stated"
-      | .proved => .str "proved"
       | .notReady => .str "notReady"
-      | .mathLibOk => .str "mathLibOk"),
+      | .stated => .str "stated"
+      | .ready => .str "ready"
+      | .sorry => .str "sorry"
+      | .proven => .str "proven"
+      | .fullyProven => .str "fullyProven"
+      | .mathlibReady => .str "mathlibReady"
+      | .inMathlib => .str "inMathlib"),
     ("statementHtml", .str n.statementHtml),
     ("proofHtml", match n.proofHtml with | some p => .str p | none => .null),
     ("signatureHtml", match n.signatureHtml with | some c => .str c | none => .null),
@@ -152,9 +156,14 @@ instance : FromJson NodeInfo where
     let envType ← j.getObjValAs? String "envType"
     let statusStr ← j.getObjValAs? String "status"
     let status := match statusStr with
-      | "proved" => NodeStatus.proved
       | "notReady" => NodeStatus.notReady
-      | "mathLibOk" => NodeStatus.mathLibOk
+      | "stated" => NodeStatus.stated
+      | "ready" => NodeStatus.ready
+      | "sorry" => NodeStatus.sorry
+      | "proven" => NodeStatus.proven
+      | "fullyProven" => NodeStatus.fullyProven
+      | "mathlibReady" => NodeStatus.mathlibReady
+      | "inMathlib" => NodeStatus.inMathlib
       | _ => NodeStatus.stated
     let statementHtml ← j.getObjValAs? String "statementHtml"
     let proofHtml := (j.getObjValAs? String "proofHtml").toOption
@@ -212,33 +221,41 @@ def nodesByEnvType (site : BlueprintSite) (envType : String) : Array NodeInfo :=
 
 /-- Count of nodes by status -/
 structure StatusCounts where
-  stated : Nat
-  proved : Nat
   notReady : Nat
-  mathLibOk : Nat
+  stated : Nat
+  ready : Nat
+  hasSorry : Nat  -- Named hasSorry because `sorry` is a keyword
+  proven : Nat
+  fullyProven : Nat
+  mathlibReady : Nat
+  inMathlib : Nat
   deriving Inhabited, Repr
 
 /-- Get counts of nodes by status -/
 def statusCounts (site : BlueprintSite) : StatusCounts := Id.run do
-  let mut counts : StatusCounts := { stated := 0, proved := 0, notReady := 0, mathLibOk := 0 }
+  let mut counts : StatusCounts := { notReady := 0, stated := 0, ready := 0, hasSorry := 0, proven := 0, fullyProven := 0, mathlibReady := 0, inMathlib := 0 }
   for node in site.nodes do
     match node.status with
-    | .stated => counts := { counts with stated := counts.stated + 1 }
-    | .proved => counts := { counts with proved := counts.proved + 1 }
     | .notReady => counts := { counts with notReady := counts.notReady + 1 }
-    | .mathLibOk => counts := { counts with mathLibOk := counts.mathLibOk + 1 }
+    | .stated => counts := { counts with stated := counts.stated + 1 }
+    | .ready => counts := { counts with ready := counts.ready + 1 }
+    | .sorry => counts := { counts with hasSorry := counts.hasSorry + 1 }
+    | .proven => counts := { counts with proven := counts.proven + 1 }
+    | .fullyProven => counts := { counts with fullyProven := counts.fullyProven + 1 }
+    | .mathlibReady => counts := { counts with mathlibReady := counts.mathlibReady + 1 }
+    | .inMathlib => counts := { counts with inMathlib := counts.inMathlib + 1 }
   return counts
 
 /-- Total number of nodes -/
 def totalNodes (site : BlueprintSite) : Nat :=
   site.nodes.size
 
-/-- Percentage of nodes that are proved or mathLibOk -/
+/-- Percentage of nodes that are proven, fullyProven, mathlibReady, or inMathlib -/
 def completionPercentage (site : BlueprintSite) : Float :=
   if site.nodes.isEmpty then 0.0
   else
     let counts := site.statusCounts
-    let completed := counts.proved + counts.mathLibOk
+    let completed := counts.proven + counts.fullyProven + counts.mathlibReady + counts.inMathlib
     (completed.toFloat / site.nodes.size.toFloat) * 100.0
 
 end BlueprintSite

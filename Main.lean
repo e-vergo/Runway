@@ -397,7 +397,7 @@ def buildSiteFromArtifacts (config : Config) (dressedDir : FilePath) : IO Bluepr
         label := key
         title := if art.name.isEmpty then none else some art.name
         envType := "theorem"  -- Default, will be overridden when graph is available
-        status := if art.leanOk then .proved else .stated
+        status := if art.leanOk then .proven else .stated
         -- Left column: LaTeX statement and proof
         statementHtml := art.latexStatement.getD ""
         proofHtml := art.latexProof

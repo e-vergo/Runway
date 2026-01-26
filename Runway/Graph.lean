@@ -15,29 +15,42 @@ namespace Runway.Graph
 
 open Lean (Name ToJson FromJson)
 
-/-- Node status for visualization coloring -/
+/-- Node status for visualization coloring.
+    Mirrors Dress.Graph.Types.NodeStatus for compatibility. -/
 inductive NodeStatus where
-  | stated       -- Has statement, no Lean
-  | proved       -- leanOk = true (has proof)
-  | notReady     -- notReady = true
-  | mathLibOk    -- Proved by Mathlib reference
+  | notReady     -- Manual: not ready to formalize (gray)
+  | stated       -- Default: statement exists in blueprint (yellow)
+  | ready        -- Manual: ready to formalize (light blue)
+  | sorry        -- Derived: has sorryAx in proof (orange/red)
+  | proven       -- Derived: formalized without sorry (green)
+  | fullyProven  -- Auto-computed: this + all ancestors proven (dark green)
+  | mathlibReady -- Manual: ready to upstream to Mathlib (medium blue)
+  | inMathlib    -- Derived or manual: already in Mathlib (dark blue)
   deriving Repr, Inhabited, BEq, DecidableEq
 
 instance : ToJson NodeStatus where
   toJson
-    | .stated => .str "stated"
-    | .proved => .str "proved"
     | .notReady => .str "notReady"
-    | .mathLibOk => .str "mathLibOk"
+    | .stated => .str "stated"
+    | .ready => .str "ready"
+    | .sorry => .str "sorry"
+    | .proven => .str "proven"
+    | .fullyProven => .str "fullyProven"
+    | .mathlibReady => .str "mathlibReady"
+    | .inMathlib => .str "inMathlib"
 
 instance : FromJson NodeStatus where
   fromJson? j := do
     let s ← j.getStr?
     match s with
-    | "stated" => return .stated
-    | "proved" => return .proved
     | "notReady" => return .notReady
-    | "mathLibOk" => return .mathLibOk
+    | "stated" => return .stated
+    | "ready" => return .ready
+    | "sorry" => return .sorry
+    | "proven" => return .proven
+    | "fullyProven" => return .fullyProven
+    | "mathlibReady" => return .mathlibReady
+    | "inMathlib" => return .inMathlib
     | _ => throw s!"Unknown NodeStatus: {s}"
 
 /-- A node in the dependency graph -/
@@ -94,10 +107,14 @@ open Lean (Json toJson)
 
 instance : ToJson NodeStatus where
   toJson s := match s with
-    | .stated => "stated"
-    | .proved => "proved"
     | .notReady => "notReady"
-    | .mathLibOk => "mathLibOk"
+    | .stated => "stated"
+    | .ready => "ready"
+    | .sorry => "sorry"
+    | .proven => "proven"
+    | .fullyProven => "fullyProven"
+    | .mathlibReady => "mathlibReady"
+    | .inMathlib => "inMathlib"
 
 instance : ToJson Node where
   toJson n := Json.mkObj [
