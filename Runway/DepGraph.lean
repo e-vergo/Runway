@@ -113,6 +113,26 @@ def graphSectionWithLink (svg : Option String) (json : Option String) (toRoot : 
     embedGraph svg json
   )
 
+/-- Create a link card for the dependency graph (no embedded graph) -/
+def graphLinkCard (toRoot : String) : Html :=
+  .tag "section" #[("class", "graph-section graph-link-card"), ("id", "dependency-graph")] (
+    .tag "a" #[("href", s!"{toRoot}dep_graph.html"), ("class", "graph-card-link")] (
+      .tag "div" #[("class", "graph-card")] (
+        .tag "div" #[("class", "graph-card-icon")] (
+          -- SVG graph icon
+          .text false "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"48\" height=\"48\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><circle cx=\"18\" cy=\"5\" r=\"3\"/><circle cx=\"6\" cy=\"12\" r=\"3\"/><circle cx=\"18\" cy=\"19\" r=\"3\"/><line x1=\"8.59\" y1=\"13.51\" x2=\"15.42\" y2=\"17.49\"/><line x1=\"15.41\" y1=\"6.51\" x2=\"8.59\" y2=\"10.49\"/></svg>"
+        ) ++
+        .tag "div" #[("class", "graph-card-content")] (
+          .tag "h3" #[] (.text true "Dependency Graph") ++
+          .tag "p" #[] (.text true "View the interactive dependency graph showing relationships between definitions and theorems.")
+        ) ++
+        .tag "div" #[("class", "graph-card-arrow")] (
+          .text false "&rarr;"
+        )
+      )
+    )
+  )
+
 /-- Create the legend for the dependency graph -/
 private def graphLegend : Html :=
   .tag "div" #[("id", "Legend"), ("class", "graph-legend")] (

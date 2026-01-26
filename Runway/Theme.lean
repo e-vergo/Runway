@@ -1090,8 +1090,8 @@ def renderMultiPageIndex (site : BlueprintSite) : RenderM Html := do
   -- Progress section
   let progress := renderProgress site
 
-  -- Dependency graph section (with link to full page)
-  let graphSection := DepGraph.graphSectionWithLink site.depGraphSvg site.depGraphJson ""
+  -- Dependency graph link card (graph is on its own page)
+  let graphSection := DepGraph.graphLinkCard ""
 
   -- Chapter list
   let chapterList := divClass "chapter-list" (

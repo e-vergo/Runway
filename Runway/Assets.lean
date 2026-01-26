@@ -1023,6 +1023,71 @@ pre.lean-code {
   text-decoration: none;
 }
 
+/* Graph link card (on homepage) */
+.graph-link-card {
+  margin: 2rem 0;
+}
+
+.graph-card-link {
+  text-decoration: none;
+  color: inherit;
+  display: block;
+}
+
+.graph-card {
+  display: flex;
+  align-items: center;
+  padding: 1.5rem;
+  background: var(--bp-bg-alt);
+  border: 1px solid var(--bp-border);
+  border-radius: 8px;
+  transition: background-color 0.2s, border-color 0.2s;
+}
+
+.graph-card:hover {
+  background-color: #f0f4f8;
+  border-color: var(--bp-primary);
+}
+
+.graph-card-icon {
+  flex-shrink: 0;
+  width: 64px;
+  height: 64px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--bp-primary);
+  margin-right: 1.5rem;
+}
+
+.graph-card-icon svg {
+  width: 48px;
+  height: 48px;
+}
+
+.graph-card-content {
+  flex: 1;
+}
+
+.graph-card-content h3 {
+  margin: 0 0 0.5rem 0;
+  color: var(--bp-text);
+  font-size: 1.25rem;
+}
+
+.graph-card-content p {
+  margin: 0;
+  color: var(--bp-text-muted);
+  font-size: 0.95rem;
+}
+
+.graph-card-arrow {
+  flex-shrink: 0;
+  font-size: 1.5rem;
+  color: var(--bp-primary);
+  margin-left: 1rem;
+}
+
 /* Graph legend styling */
 .graph-legend {
   margin-bottom: 1rem;
