@@ -352,11 +352,13 @@ def buildSiteFromArtifacts (config : Config) (dressedDir : FilePath) : IO Bluepr
   -- Convert graph nodes to NodeInfo, populating HTML from artifacts
   let mut nodes : Array NodeInfo := #[]
   for node in depGraph.nodes do
-    -- Look up artifact by node id (which is the sanitized label)
-    let artifact := declArtifacts.get? node.id
+    -- Normalize node.id: artifacts are keyed with hyphens (colon -> hyphen)
+    let normalizedId := node.id.replace ":" "-"
+    -- Look up artifact by normalized id
+    let artifact := declArtifacts.get? normalizedId
     -- Load hover data from decl.hovers.json (codeHtml from decl.html is the full decorated code,
     -- so we prefer the clean signature+proof from the base64-decoded fields in decl.tex)
-    let (_, hoverData) ← loadCodeHtmlAndHovers dressedDir node.id
+    let (_, hoverData) ← loadCodeHtmlAndHovers dressedDir normalizedId
 
     -- Extract Lean signature and proof body HTML separately for right column
     let signatureHtml := match artifact with
@@ -367,7 +369,7 @@ def buildSiteFromArtifacts (config : Config) (dressedDir : FilePath) : IO Bluepr
       | none => none
 
     nodes := nodes.push {
-      label := node.id
+      label := normalizedId  -- Use normalized label for consistent lookup
       title := some node.label
       envType := node.envType
       status := node.status
@@ -379,8 +381,8 @@ def buildSiteFromArtifacts (config : Config) (dressedDir : FilePath) : IO Bluepr
       proofBodyHtml := proofBodyHtml
       hoverData := artifact.bind (·.hoverData) |>.orElse (fun _ => hoverData)
       declNames := node.leanDecls
-      uses := (depGraph.inEdges node.id).map (·.from_)
-      url := node.url
+      uses := (depGraph.inEdges node.id).map (·.from_.replace ":" "-")
+      url := node.url.replace ":" "-"  -- Normalize URL anchor to match HTML id
     }
 
   -- If no nodes from graph, build from artifacts directly
@@ -406,7 +408,7 @@ def buildSiteFromArtifacts (config : Config) (dressedDir : FilePath) : IO Bluepr
         proofBodyHtml := proofBodyHtml
         hoverData := art.hoverData.orElse (fun _ => hoverData)
         declNames := if art.name.isEmpty then #[] else #[art.name.toName]
-        uses := art.uses
+        uses := art.uses.map (·.replace ":" "-")  -- Normalize dependency labels
         url := s!"#node-{key}"
       }
 
