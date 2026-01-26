@@ -607,17 +607,26 @@ def runPaper (cliConfig : CLIConfig) : IO UInt32 := do
       artifacts := artifacts.insert node.label node
 
     -- Convert document to paper HTML
-    let paperContent := Runway.Paper.convertDocument doc artifacts config
+    let docContent := Runway.Paper.convertDocument doc artifacts config
 
-    -- Wrap in full page template
-    let paperHtml := Runway.Paper.renderPaperPage config paperContent
+    -- Wrap in ar5iv-paper container
+    let paperContent := Runway.Paper.renderPaperContent config docContent
+
+    -- Apply sidebar template (same as other blueprint pages)
+    let ctx : Runway.Render.Context := {
+      config := config
+      depGraph := site.depGraph
+      path := #[]
+    }
+    let paperTemplate := Runway.DefaultTheme.primaryTemplateWithSidebar site.chapters (some "paper")
+    let (paperHtml, _) ← paperTemplate paperContent |>.run ctx
 
     -- Ensure output directory exists
     IO.FS.createDirAll outputDir
 
     -- Write paper.html
     let paperOutputPath := outputDir / "paper.html"
-    IO.FS.writeFile paperOutputPath paperHtml.asString
+    IO.FS.writeFile paperOutputPath (Verso.Output.Html.doctype ++ "\n" ++ paperHtml.asString)
     IO.println s!"  - Generated {paperOutputPath}"
 
     -- Copy/create paper.css in assets

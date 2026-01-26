@@ -302,39 +302,77 @@ def renderPage (title : String) (nodes : Array NodeInfo) : RenderM Html := do
 
 /-! ## Progress Statistics -/
 
-/-- Render progress statistics -/
+/-- Render a single pie slice as an SVG path arc.
+    Uses cumulative offset for positioning. Returns the path element and updated offset. -/
+private def renderPieSlice (count : Nat) (total : Nat) (offset : Float) (color : String) : Html × Float :=
+  if count == 0 || total == 0 then
+    (Html.empty, offset)
+  else
+    let pct := (count.toFloat / total.toFloat) * 100.0
+    -- For stroke-dasharray technique on a circle with r=16 (circumference = 2*pi*16 ≈ 100.53)
+    let circumference := 100.53
+    let dashLen := pct * circumference / 100.0
+    let dashOffset := (100.0 - offset) * circumference / 100.0
+    let slice := .tag "circle" #[
+      ("cx", "16"), ("cy", "16"), ("r", "8"),
+      ("fill", "transparent"),
+      ("stroke", color),
+      ("stroke-width", "16"),
+      ("stroke-dasharray", s!"{dashLen} {circumference}"),
+      ("stroke-dashoffset", s!"{dashOffset}"),
+      ("transform", "rotate(-90 16 16)")
+    ] Html.empty
+    (slice, offset + pct)
+
+/-- Render a legend item with colored swatch -/
+private def renderLegendItem (count : Nat) (label : String) (cssClass : String) : Html :=
+  if count == 0 then Html.empty
+  else
+    divClass "legend-item" (
+      .tag "span" #[("class", s!"legend-swatch {cssClass}")] Html.empty ++
+      .tag "span" #[] (Html.text true s!"{count} {label}")
+    )
+
+/-- Render progress statistics as compact pie chart + legend -/
 def renderProgress (site : BlueprintSite) : Html :=
   let counts := site.statusCounts
   let total := site.totalNodes
-  let pct := site.completionPercentage
-  -- Round to integer for display
-  let pctRounded := pct.round.toUInt32
 
-  let bar := divClass "progress-bar" (
-    .tag "div" #[
-      ("class", "progress-fill"),
-      ("style", s!"width: {pctRounded}%")
-    ] Html.empty
-  )
+  if total == 0 then Html.empty
+  else
+    -- Build pie slices with cumulative offset
+    -- Order: not-ready, stated, ready, sorry, proven, fully-proven, mathlib-ready, in-mathlib
+    let (slice1, off1) := renderPieSlice counts.notReady total 0.0 "#F4A460"
+    let (slice2, off2) := renderPieSlice counts.stated total off1 "#FFD700"
+    let (slice3, off3) := renderPieSlice counts.ready total off2 "#20B2AA"
+    let (slice4, off4) := renderPieSlice counts.hasSorry total off3 "#8B0000"
+    let (slice5, off5) := renderPieSlice counts.proven total off4 "#90EE90"
+    let (slice6, off6) := renderPieSlice counts.fullyProven total off5 "#228B22"
+    let (slice7, off7) := renderPieSlice counts.mathlibReady total off6 "#4169E1"
+    let (slice8, _) := renderPieSlice counts.inMathlib total off7 "#191970"
 
-  let stats := divClass "progress-stats" (
-    spanClass "stat proven" (Html.text true s!"{counts.proven} proven") ++
-    spanClass "stat fully-proven" (Html.text true s!"{counts.fullyProven} fully proven") ++
-    spanClass "stat mathlib-ready" (Html.text true s!"{counts.mathlibReady} mathlib ready") ++
-    spanClass "stat in-mathlib" (Html.text true s!"{counts.inMathlib} in mathlib") ++
-    spanClass "stat sorry" (Html.text true s!"{counts.hasSorry} sorry") ++
-    spanClass "stat stated" (Html.text true s!"{counts.stated} stated") ++
-    spanClass "stat ready" (Html.text true s!"{counts.ready} ready") ++
-    spanClass "stat not-ready" (Html.text true s!"{counts.notReady} not ready") ++
-    spanClass "stat total" (Html.text true s!"{total} total")
-  )
+    let pie := .tag "svg" #[
+      ("class", "stats-pie"),
+      ("viewBox", "0 0 32 32"),
+      ("width", "64"),
+      ("height", "64")
+    ] (slice1 ++ slice2 ++ slice3 ++ slice4 ++ slice5 ++ slice6 ++ slice7 ++ slice8)
 
-  divClass "progress-section" (
-    .tag "h2" #[] (Html.text true "Progress") ++
-    bar ++
-    stats ++
-    divClass "progress-label" (Html.text true s!"{pctRounded}%")
-  )
+    let legend := divClass "stats-legend" (
+      renderLegendItem counts.notReady "not ready" "not-ready" ++
+      renderLegendItem counts.stated "stated" "stated" ++
+      renderLegendItem counts.ready "ready" "ready" ++
+      renderLegendItem counts.hasSorry "sorry" "sorry" ++
+      renderLegendItem counts.proven "proven" "proven" ++
+      renderLegendItem counts.fullyProven "fully proven" "fully-proven" ++
+      renderLegendItem counts.mathlibReady "mathlib ready" "mathlib-ready" ++
+      renderLegendItem counts.inMathlib "in mathlib" "in-mathlib"
+    )
+
+    divClass "progress-section" (
+      .tag "h2" #[] (Html.text true "Progress") ++
+      divClass "stats-compact" (pie ++ legend)
+    )
 
 /-! ## Index Page Rendering -/
 

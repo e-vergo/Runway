@@ -6,6 +6,7 @@ import Runway.Site
 import Runway.Config
 import Runway.Latex
 import Runway.Graph
+import Runway.Render
 import Verso.Output.Html
 import Std.Data.HashMap
 
@@ -21,6 +22,7 @@ namespace Runway.Paper
 open Verso.Output Html
 open Std (HashMap)
 open Runway.Graph (NodeStatus)
+open Runway (divClass)
 
 /-- Verification status for badge display -/
 inductive VerificationLevel
@@ -131,7 +133,20 @@ def renderHeader (config : Config) : Html :=
      | none => Html.empty)
   )
 
-/-- Full paper HTML page -/
+/-- Render paper content (header, body, footer) wrapped in ar5iv-paper div.
+    This is the content that goes inside the sidebar template. -/
+def renderPaperContent (config : Config) (content : Html) : Html :=
+  divClass "ar5iv-paper" (
+    renderHeader config ++
+    .tag "main" #[("class", "paper-content")] content ++
+    .tag "footer" #[("class", "paper-footer")] (
+      Html.text true "Generated with " ++
+      .tag "a" #[("href", "https://github.com/e-vergo/Side-By-Side-Blueprint")]
+        (Html.text true "Side-by-Side Blueprint")
+    )
+  )
+
+/-- Full paper HTML page (standalone, deprecated - use renderPaperContent with sidebar template) -/
 def renderPaperPage (config : Config) (content : Html) : Html :=
   let mathjaxConfig := .tag "script" #[] (Html.text false
     "MathJax = { tex: { inlineMath: [['$', '$'], ['\\\\(', '\\\\)']], displayMath: [['$$', '$$'], ['\\\\[', '\\\\]']], processEscapes: true } };")

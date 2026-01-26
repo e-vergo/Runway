@@ -64,11 +64,24 @@ structure Theme where
 namespace DefaultTheme
 
 /-- Render sidebar navigation for chapters -/
-def renderSidebar (chapters : Array ChapterInfo) (currentSlug : Option String) (toRoot : String) : Html :=
+def renderSidebar (chapters : Array ChapterInfo) (currentSlug : Option String) (toRoot : String) (config : Config) : Html :=
   let homeClass := if currentSlug.isNone then "active" else ""
   let homeItem := .tag "li" #[("class", homeClass)] (
     .tag "a" #[("href", s!"{toRoot}index.html")] (Html.text true "Blueprint Home")
   )
+
+  -- Chapter items
+  let chapterItems := chapters.map fun chapter =>
+    let isActive := currentSlug == some chapter.slug
+    let itemClass := if isActive then "active" else ""
+    let href := s!"{toRoot}{chapter.slug}.html"
+    let chapterPrefix := if chapter.isAppendix then "Appendix" else s!"{chapter.number}."
+    .tag "li" #[("class", itemClass)] (
+      .tag "a" #[("href", href)] (Html.text true s!"{chapterPrefix} {chapter.title}")
+    )
+
+  -- Separator element
+  let separator := .tag "li" #[("class", "nav-separator")] Html.empty
 
   -- Dependency graph link
   let graphClass := if currentSlug == some "dep_graph" then "active" else ""
@@ -82,18 +95,18 @@ def renderSidebar (chapters : Array ChapterInfo) (currentSlug : Option String) (
     .tag "a" #[("href", s!"{toRoot}paper.html")] (Html.text true "Paper")
   )
 
-  let chapterItems := chapters.map fun chapter =>
-    let isActive := currentSlug == some chapter.slug
-    let itemClass := if isActive then "active" else ""
-    let href := s!"{toRoot}{chapter.slug}.html"
-    let chapterPrefix := if chapter.isAppendix then "Appendix" else s!"{chapter.number}."
-    .tag "li" #[("class", itemClass)] (
-      .tag "a" #[("href", href)] (Html.text true s!"{chapterPrefix} {chapter.title}")
-    )
+  -- External links (GitHub, API Docs)
+  let githubItem := match config.githubUrl with
+    | some url => .tag "li" #[] (.tag "a" #[("href", url), ("target", "_blank")] (Html.text true "GitHub"))
+    | none => Html.empty
+
+  let docsItem := match config.docgen4Url with
+    | some url => .tag "li" #[] (.tag "a" #[("href", url), ("target", "_blank")] (Html.text true "API Docs"))
+    | none => Html.empty
 
   .tag "nav" #[("class", "toc")] (
     .tag "ul" #[("class", "sub-toc-0")] (
-      homeItem ++ graphItem ++ paperItem ++ .seq chapterItems
+      .seq #[homeItem] ++ .seq chapterItems ++ .seq #[separator, graphItem, paperItem, separator, githubItem, docsItem]
     )
   )
 
@@ -169,28 +182,16 @@ def primaryTemplate : Template := fun content => do
       .tag "header" #[] (
         .tag "nav" #[("class", "header")] (
           divClass "nav-wrapper" (
-            .tag "a" #[("class", "brand-logo left"), ("href", s!"{toRoot}index.html")] (
+            -- Hamburger menu for mobile (left side)
+            .tag "span" #[("id", "toc-toggle")] (Html.text true "☰") ++
+            .tag "a" #[("class", "brand-logo"), ("href", s!"{toRoot}index.html")] (
               Html.text true config.title
-            ) ++
-            .tag "ul" #[("class", "nav-list right")] (
-              (match config.githubUrl with
-               | some url => .tag "li" #[] (
-                   .tag "a" #[("href", url), ("target", "_blank")] (Html.text true "GitHub")
-                 )
-               | none => Html.empty) ++
-              (match config.docgen4Url with
-               | some url => .tag "li" #[] (
-                   .tag "a" #[("href", url), ("target", "_blank")] (Html.text true "API Docs")
-                 )
-               | none => Html.empty)
             )
           )
         )
       ) ++
       -- Main wrapper with sidebar and content
       divClass "wrapper" (
-        -- Sidebar toggle button (for mobile)
-        .tag "span" #[("id", "toc-toggle")] (Html.text true "☰") ++
         -- Table of contents sidebar (default single-page version)
         .tag "nav" #[("class", "toc")] (
           .tag "ul" #[("class", "sub-toc-0")] (
@@ -232,7 +233,7 @@ def primaryTemplateWithSidebar (chapters : Array ChapterInfo) (currentSlug : Opt
   "#)
 
   -- Build sidebar
-  let sidebar := renderSidebar chapters currentSlug toRoot
+  let sidebar := renderSidebar chapters currentSlug toRoot config
 
   -- Build prev/next nav for chapter pages
   let prevNextNav := match currentSlug with
@@ -265,28 +266,16 @@ def primaryTemplateWithSidebar (chapters : Array ChapterInfo) (currentSlug : Opt
       .tag "header" #[] (
         .tag "nav" #[("class", "header")] (
           divClass "nav-wrapper" (
-            .tag "a" #[("class", "brand-logo left"), ("href", s!"{toRoot}index.html")] (
+            -- Hamburger menu for mobile (left side)
+            .tag "span" #[("id", "toc-toggle")] (Html.text true "☰") ++
+            .tag "a" #[("class", "brand-logo"), ("href", s!"{toRoot}index.html")] (
               Html.text true config.title
-            ) ++
-            .tag "ul" #[("class", "nav-list right")] (
-              (match config.githubUrl with
-               | some url => .tag "li" #[] (
-                   .tag "a" #[("href", url), ("target", "_blank")] (Html.text true "GitHub")
-                 )
-               | none => Html.empty) ++
-              (match config.docgen4Url with
-               | some url => .tag "li" #[] (
-                   .tag "a" #[("href", url), ("target", "_blank")] (Html.text true "API Docs")
-                 )
-               | none => Html.empty)
             )
           )
         )
       ) ++
       -- Main wrapper with sidebar and content
       divClass "wrapper" (
-        -- Sidebar toggle button (for mobile)
-        .tag "span" #[("id", "toc-toggle")] (Html.text true "☰") ++
         -- Chapter sidebar navigation
         sidebar ++
         -- Main content area with prev/next nav
@@ -477,25 +466,9 @@ def renderMultiPageIndex (site : BlueprintSite) : RenderM Html := do
   -- Progress section
   let progress := renderProgress site
 
-  -- Chapter list
-  let chapterList := divClass "chapter-list" (
-    .tag "h2" #[] (Html.text true "Chapters") ++
-    .tag "ol" #[("class", "chapter-index")] (
-      .seq (site.chapters.map fun chapter =>
-        let chapterPrefix := if chapter.isAppendix then "Appendix" else ""
-        .tag "li" #[] (
-          .tag "a" #[("href", s!"{chapter.slug}.html")] (
-            Html.text true (if chapterPrefix.isEmpty then chapter.title else s!"{chapterPrefix}: {chapter.title}")
-          )
-        )
-      )
-    )
-  )
-
   return divClass "index-page" (
     titleSection ++
-    progress ++
-    chapterList
+    progress
   )
 
 /-- Generate multi-page site with chapter-based navigation -/
