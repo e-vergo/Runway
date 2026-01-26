@@ -60,8 +60,6 @@ private def graphToolbar : Html :=
       (.text true "+") ++
     .tag "button" #[("id", "graph-zoom-out"), ("title", "Zoom out"), ("aria-label", "Zoom out")]
       (.text true "\u2212") ++
-    .tag "button" #[("id", "graph-reset"), ("title", "Reset view"), ("aria-label", "Reset view")]
-      (.text true "Reset") ++
     .tag "button" #[("id", "graph-fit"), ("title", "Fit to window"), ("aria-label", "Fit to window")]
       (.text true "Fit")
   )
