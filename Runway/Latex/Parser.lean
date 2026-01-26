@@ -361,6 +361,15 @@ partial def parseBody : ParserM (Array Block) := do
       | "inputleannode" =>
         let lbl ← parseBraceContent
         blocks := blocks.push (Block.inputLeanNode lbl)
+      | "paperstatement" =>
+        let label ← parseBraceContent
+        blocks := blocks.push (Block.paperStatement label)
+      | "paperfull" =>
+        let label ← parseBraceContent
+        blocks := blocks.push (Block.paperFull label)
+      | "paperproof" =>
+        let label ← parseBraceContent
+        blocks := blocks.push (Block.paperProof label)
       | "input" =>
         let _ ← parseBraceContent
       | _ =>
@@ -405,6 +414,12 @@ partial def parseSectionBody (level : Nat) : ParserM (Array Block) := do
           blocks := blocks.push (Block.inputLeanModule (← parseBraceContent).toName)
         | "inputleannode" =>
           blocks := blocks.push (Block.inputLeanNode (← parseBraceContent))
+        | "paperstatement" =>
+          blocks := blocks.push (Block.paperStatement (← parseBraceContent))
+        | "paperfull" =>
+          blocks := blocks.push (Block.paperFull (← parseBraceContent))
+        | "paperproof" =>
+          blocks := blocks.push (Block.paperProof (← parseBraceContent))
         | "section" =>
           let title ← parseBraceContent
           skipTrivia

@@ -262,6 +262,21 @@ partial def renderBlock (config : RenderConfig) : Latex.Block → RenderM Html
     return .tag "div" #[("id", labelToId label), ("class", "lean-node"), ("data-label", label)]
       (Html.text true s!"[Lean node: {label}]")
 
+  | .paperStatement label => do
+    let _ ← registerLabel label
+    return .tag "div" #[("id", labelToId label), ("class", "paper-statement"), ("data-label", label)]
+      (Html.text true s!"[Paper statement: {label}]")
+
+  | .paperFull label => do
+    let _ ← registerLabel label
+    return .tag "div" #[("id", labelToId label), ("class", "paper-full"), ("data-label", label)]
+      (Html.text true s!"[Paper full: {label}]")
+
+  | .paperProof label => do
+    let _ ← registerLabel label
+    return .tag "div" #[("id", labelToId label), ("class", "paper-proof"), ("data-label", label)]
+      (Html.text true s!"[Paper proof: {label}]")
+
   | .raw content =>
     return Html.text false content
 

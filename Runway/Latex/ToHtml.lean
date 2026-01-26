@@ -190,6 +190,18 @@ partial def blockToHtml : Block → HtmlM Unit
     -- Record node reference and emit a placeholder
     addNodeRef label
     emit s!"<div class=\"lean-node-placeholder\" data-node=\"{escape label}\"></div>\n"
+  | .paperStatement label => do
+    -- Paper mode: statement only
+    addNodeRef label
+    emit s!"<div class=\"paper-statement-placeholder\" data-node=\"{escape label}\"></div>\n"
+  | .paperFull label => do
+    -- Paper mode: statement + proof
+    addNodeRef label
+    emit s!"<div class=\"paper-full-placeholder\" data-node=\"{escape label}\"></div>\n"
+  | .paperProof label => do
+    -- Paper mode: proof body only
+    addNodeRef label
+    emit s!"<div class=\"paper-proof-placeholder\" data-node=\"{escape label}\"></div>\n"
   | .raw content => emit content
   | .comment _ => pure ()  -- Skip comments
 
@@ -330,6 +342,9 @@ partial def extractNodeRefs (blocks : Array Block) : Array String := Id.run do
       stack := stack.pop
       match block with
       | .inputLeanNode label => refs := refs.push label
+      | .paperStatement label => refs := refs.push label
+      | .paperFull label => refs := refs.push label
+      | .paperProof label => refs := refs.push label
       | .chapter _ _ body => stack := stack ++ body.reverse
       | .section _ _ _ body => stack := stack ++ body.reverse
       | .theorem _ _ _ statement => stack := stack ++ statement.reverse

@@ -17,6 +17,7 @@ import Runway.DepGraph
 import Runway.DocGen4
 import Runway.Doc
 import Runway.Assets
+import Runway.Paper
 
 /-!
 # Runway

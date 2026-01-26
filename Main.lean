@@ -3,6 +3,7 @@ Copyright (c) 2025 Runway contributors. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 -/
 import Runway
+import Runway.Paper
 
 /-!
 # Runway CLI
@@ -48,6 +49,8 @@ structure CLIConfig where
   showVersion : Bool := false
   /-- Command to execute -/
   command : String := "build"
+  /-- Path to paper.tex (optional, overrides config) -/
+  paperTexPath : Option FilePath := none
   deriving Repr, Inhabited
 
 /-- Parse command-line arguments into CLIConfig -/
@@ -86,7 +89,7 @@ def parseArgs (args : List String) : Except String CLIConfig := do
   match positionalArgs with
   | [] => pure ()
   | [cmd] =>
-    if cmd == "build" || cmd == "serve" || cmd == "check" then
+    if cmd == "build" || cmd == "serve" || cmd == "check" || cmd == "paper" then
       config := { config with command := cmd }
     else if cmd.endsWith ".json" then
       config := { config with configPath := cmd }
@@ -556,6 +559,125 @@ def runCheck (cliConfig : CLIConfig) : IO UInt32 := do
     IO.println "  - All declarations verified"
     return 0
 
+/-- Execute the paper command - generate ar5iv-style paper from paper.tex -/
+def runPaper (cliConfig : CLIConfig) : IO UInt32 := do
+  IO.println "Runway: Generating ar5iv-style paper..."
+
+  -- Load configuration
+  let config ← loadConfig cliConfig.configPath
+
+  -- Determine paper.tex path (CLI override or config)
+  let paperTexPath := cliConfig.paperTexPath.map toString |>.orElse (fun _ => config.paperTexPath)
+  match paperTexPath with
+  | none =>
+    IO.eprintln "Error: No paper.tex path specified. Set 'paperTexPath' in runway.json or use --paper-tex option."
+    return 1
+  | some texPathStr =>
+    let texPath : FilePath := texPathStr
+
+    -- Check if paper.tex exists
+    if !(← texPath.pathExists) then
+      IO.eprintln s!"Error: Paper tex file not found at {texPath}"
+      return 1
+
+    IO.println s!"  - Parsing {texPath}"
+
+    -- Parse paper.tex
+    let (doc, errors) ← parseFile texPath
+    for err in errors do
+      IO.eprintln s!"    LaTeX parse warning: {err}"
+
+    -- Determine directories
+    let dressedDir := cliConfig.buildDir / "dressed"
+    let outputDir := cliConfig.outputDir.getD (cliConfig.buildDir / "runway")
+
+    -- Check if dressed directory exists
+    if !(← dressedDir.pathExists) then
+      IO.eprintln s!"Error: Dressed artifacts not found at {dressedDir}"
+      IO.eprintln "Run 'lake build' to generate Dress artifacts first."
+      return 1
+
+    -- Load artifacts (reuse the site building logic)
+    let site ← buildSiteFromArtifacts config dressedDir
+    IO.println s!"  - Loaded {site.nodes.size} nodes from artifacts"
+
+    -- Build artifact map from nodes
+    let mut artifacts : HashMap String NodeInfo := {}
+    for node in site.nodes do
+      artifacts := artifacts.insert node.label node
+
+    -- Convert document to paper HTML
+    let paperContent := Runway.Paper.convertDocument doc artifacts config
+
+    -- Wrap in full page template
+    let paperHtml := Runway.Paper.renderPaperPage config paperContent
+
+    -- Ensure output directory exists
+    IO.FS.createDirAll outputDir
+
+    -- Write paper.html
+    let paperOutputPath := outputDir / "paper.html"
+    IO.FS.writeFile paperOutputPath paperHtml.asString
+    IO.println s!"  - Generated {paperOutputPath}"
+
+    -- Copy/create paper.css in assets
+    let assetsOutputDir := outputDir / "assets"
+    IO.FS.createDirAll assetsOutputDir
+
+    -- Check for paper.css in assetsDir first
+    let srcPaperCss := config.assetsDir / "paper.css"
+    let dstPaperCss := assetsOutputDir / "paper.css"
+    if ← srcPaperCss.pathExists then
+      let cssContent ← IO.FS.readFile srcPaperCss
+      IO.FS.writeFile dstPaperCss cssContent
+      IO.println s!"  - Copied {srcPaperCss} to {dstPaperCss}"
+    else
+      -- Generate minimal paper.css if not provided
+      let minimalCss := paperCssContent
+      IO.FS.writeFile dstPaperCss minimalCss
+      IO.println s!"  - Generated minimal {dstPaperCss}"
+
+    IO.println s!"Paper generated at {paperOutputPath}"
+    return 0
+where
+  /-- Minimal paper CSS content -/
+  paperCssContent : String :=
+    "/* ar5iv-style Paper CSS */
+body.ar5iv-paper {
+  font-family: 'Computer Modern Serif', 'Latin Modern Roman', Georgia, serif;
+  max-width: 800px;
+  margin: 0 auto;
+  padding: 2rem;
+  line-height: 1.6;
+  color: #333;
+}
+.paper-header { text-align: center; margin-bottom: 3rem; }
+.paper-title { font-size: 2rem; margin-bottom: 0.5rem; }
+.paper-authors { font-style: italic; margin-bottom: 1rem; }
+.paper-abstract { text-align: left; margin: 2rem auto; max-width: 600px; font-size: 0.95rem; }
+.paper-content { }
+.paper-chapter h1 { font-size: 1.5rem; border-bottom: 1px solid #ccc; padding-bottom: 0.5rem; margin-top: 2rem; }
+.paper-section h2 { font-size: 1.25rem; margin-top: 1.5rem; }
+.paper-section h3 { font-size: 1.1rem; margin-top: 1.25rem; }
+.paper-theorem { margin: 1.5rem 0; padding: 1rem; background: #f8f9fa; border-left: 3px solid #007bff; }
+.paper-definition { border-left-color: #28a745; }
+.paper-lemma { border-left-color: #6c757d; }
+.paper-theorem-header { font-weight: bold; margin-bottom: 0.5rem; }
+.paper-theorem-type { }
+.paper-theorem-statement { }
+.paper-proof { margin: 1rem 0 1.5rem 1rem; font-style: italic; }
+.paper-proof-header { font-style: normal; font-weight: bold; }
+.paper-qed { float: right; }
+.verification-badge { font-size: 0.75rem; margin-left: 0.5rem; padding: 0.1rem 0.4rem; border-radius: 3px; }
+.verification-badge.verified { background: #d4edda; color: #155724; }
+.verification-badge.in-progress { background: #fff3cd; color: #856404; }
+.verification-badge.not-started { background: #f8d7da; color: #721c24; }
+.blueprint-link { font-size: 0.8rem; margin-left: 0.5rem; }
+.displaymath { margin: 1rem 0; text-align: center; }
+.paper-footer { margin-top: 3rem; padding-top: 1rem; border-top: 1px solid #ccc; font-size: 0.85rem; color: #666; text-align: center; }
+.paper-error { color: #dc3545; background: #f8d7da; padding: 0.5rem; margin: 0.5rem 0; border-radius: 3px; }
+"
+
 /-- Show help message -/
 def showHelp : IO Unit := do
   IO.println "Runway - Presentation layer for Lean mathematical blueprints"
@@ -564,6 +686,7 @@ def showHelp : IO Unit := do
   IO.println ""
   IO.println "Commands:"
   IO.println "  build    Generate HTML from Dress artifacts (default)"
+  IO.println "  paper    Generate ar5iv-style paper from paper.tex"
   IO.println "  serve    Start local HTTP server for preview"
   IO.println "  check    Verify Lean declarations exist"
   IO.println ""
@@ -577,6 +700,7 @@ def showHelp : IO Unit := do
   IO.println "  runway build                    Build site with default config"
   IO.println "  runway build runway.json        Build site with custom config"
   IO.println "  runway --output _site build     Build to custom output directory"
+  IO.println "  runway paper                    Generate paper from paper.tex"
   IO.println "  runway serve                    Start local preview server"
 
 /-- Show version information -/
@@ -603,6 +727,7 @@ def main (args : List String) : IO UInt32 := do
     else
       match cliConfig.command with
       | "build" => Runway.CLI.runBuild cliConfig
+      | "paper" => Runway.CLI.runPaper cliConfig
       | "serve" => Runway.CLI.runServe cliConfig
       | "check" => Runway.CLI.runCheck cliConfig
       | cmd =>

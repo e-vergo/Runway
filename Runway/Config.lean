@@ -32,6 +32,14 @@ structure Config where
   blueprintTexPath : Option String := none
   /-- Directory containing static assets (blueprint.css, plastex.js, verso-code.js) -/
   assetsDir : System.FilePath
+  /-- Path to paper.tex for ar5iv-style paper generation -/
+  paperTexPath : Option String := none
+  /-- Paper title (defaults to site title if not specified) -/
+  paperTitle : Option String := none
+  /-- Paper authors -/
+  paperAuthors : Array String := #[]
+  /-- Paper abstract -/
+  paperAbstract : Option String := none
   deriving Inhabited, Repr
 
 instance : ToJson Config where
@@ -43,7 +51,11 @@ instance : ToJson Config where
     ("baseUrl", .str c.baseUrl),
     ("outputDir", .str c.outputDir.toString),
     ("blueprintTexPath", match c.blueprintTexPath with | some p => .str p | none => .null),
-    ("assetsDir", .str c.assetsDir.toString)
+    ("assetsDir", .str c.assetsDir.toString),
+    ("paperTexPath", match c.paperTexPath with | some p => .str p | none => .null),
+    ("paperTitle", match c.paperTitle with | some t => .str t | none => .null),
+    ("paperAuthors", ToJson.toJson c.paperAuthors),
+    ("paperAbstract", match c.paperAbstract with | some a => .str a | none => .null)
   ]
 
 instance : FromJson Config where
@@ -56,6 +68,10 @@ instance : FromJson Config where
     let outputDir : String ← j.getObjValAs? String "outputDir" <|> pure "_site"
     let blueprintTexPath : Option String := (j.getObjValAs? String "blueprintTexPath").toOption
     let assetsDir : String ← j.getObjValAs? String "assetsDir"
+    let paperTexPath : Option String := (j.getObjValAs? String "paperTexPath").toOption
+    let paperTitle : Option String := (j.getObjValAs? String "paperTitle").toOption
+    let paperAuthors : Array String ← j.getObjValAs? (Array String) "paperAuthors" <|> pure #[]
+    let paperAbstract : Option String := (j.getObjValAs? String "paperAbstract").toOption
     return {
       title := title
       projectName := projectName
@@ -65,6 +81,10 @@ instance : FromJson Config where
       outputDir := outputDir
       blueprintTexPath := blueprintTexPath
       assetsDir := assetsDir
+      paperTexPath := paperTexPath
+      paperTitle := paperTitle
+      paperAuthors := paperAuthors
+      paperAbstract := paperAbstract
     }
 
 end Runway

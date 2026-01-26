@@ -92,6 +92,12 @@ inductive Block : Type where
   | inputLeanModule (moduleName : Lean.Name)
   /-- Include Lean node -/
   | inputLeanNode (label : String)
+  /-- Paper statement hook - pulls statement only -/
+  | paperStatement (label : String)
+  /-- Paper full hook - pulls statement + proof -/
+  | paperFull (label : String)
+  /-- Paper proof hook - pulls proof body only -/
+  | paperProof (label : String)
   /-- Raw block -/
   | raw (content : String)
   /-- Comment -/
