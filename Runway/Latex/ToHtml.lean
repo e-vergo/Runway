@@ -341,4 +341,47 @@ partial def extractNodeRefs (blocks : Array Block) : Array String := Id.run do
 
   return refs
 
+/-- Information about a LaTeX-only theorem (has \label but no \inputleannode) -/
+structure LatexOnlyTheorem where
+  /-- The label (from \label{...}) -/
+  label : String
+  /-- The environment type (theorem, lemma, definition, etc.) -/
+  envType : String
+  /-- Dependencies from \uses{...} -/
+  uses : Array String
+  deriving Repr, Inhabited
+
+/-- Extract labeled theorem environments from blocks.
+    Returns theorems that have a \label{} but may not have a corresponding \inputleannode{}.
+    Used to detect LaTeX-only stated nodes. -/
+partial def extractLabeledTheorems (blocks : Array Block) : Array LatexOnlyTheorem := Id.run do
+  let mut theorems : Array LatexOnlyTheorem := #[]
+  let mut stack : Array Block := blocks.reverse
+
+  while !stack.isEmpty do
+    match stack.back? with
+    | none => break
+    | some block =>
+      stack := stack.pop
+      match block with
+      | .theorem envType _ metadata statement =>
+        -- If this theorem has a label, record it
+        if let some label := metadata.label then
+          theorems := theorems.push {
+            label := label
+            envType := envType
+            uses := metadata.uses
+          }
+        -- Continue into statement to find nested theorems
+        stack := stack ++ statement.reverse
+      | .chapter _ _ body => stack := stack ++ body.reverse
+      | .section _ _ _ body => stack := stack ++ body.reverse
+      | .proof _ content => stack := stack ++ content.reverse
+      | .itemize items => stack := stack ++ (flattenItems items).reverse
+      | .enumerate items => stack := stack ++ (flattenItems items).reverse
+      | .document _ body => stack := stack ++ body.reverse
+      | _ => pure ()
+
+  return theorems
+
 end Runway.Latex
