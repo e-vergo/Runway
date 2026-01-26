@@ -675,52 +675,64 @@ nav.toc li.active a {
 /* Progress Section */
 .progress-section {
   margin: 2rem 0;
-  padding: 1.5rem;
-  background: var(--bp-bg-alt);
-  border-radius: 8px;
+  padding: 1rem 0;
 }
 
 .progress-bar {
-  height: 24px;
+  height: 8px;
   background: var(--bp-border);
-  border-radius: 12px;
+  border-radius: 4px;
   overflow: hidden;
-  margin: 1rem 0;
+  margin: 0.75rem 0;
 }
 
 .progress-fill {
   height: 100%;
-  background: linear-gradient(90deg, var(--bp-success), var(--bp-primary));
+  background: var(--bp-primary);
   transition: width 0.3s ease;
+}
+
+.progress-label {
+  font-size: 0.8125rem;
+  color: var(--bp-text-muted);
+  text-align: right;
+  margin-top: 0.25rem;
 }
 
 .progress-stats {
   display: flex;
   flex-wrap: wrap;
-  gap: 1rem;
-  margin-top: 1rem;
+  gap: 0.25rem 1rem;
   align-items: center;
+  font-size: 0.8125rem;
+  color: var(--bp-text-muted);
 }
 
 .stat {
   display: inline-flex;
   align-items: center;
-  padding: 0.5rem 1rem;
-  border-radius: 6px;
-  font-size: 0.875rem;
-  margin-right: 0.75rem;
-  font-weight: 500;
+  gap: 0.375rem;
 }
 
-.stat:last-child {
-  margin-right: 0;
+.stat::before {
+  content: '';
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 2px;
+  flex-shrink: 0;
 }
 
-.stat.proved { background: rgba(22, 163, 74, 0.1); color: var(--bp-success); }
-.stat.mathlib { background: rgba(37, 99, 235, 0.1); color: var(--bp-primary); }
-.stat.stated { background: rgba(202, 138, 4, 0.1); color: var(--bp-warning); }
-.stat.not-ready { background: rgba(220, 38, 38, 0.1); color: var(--bp-danger); }
-.stat.total { background: var(--bp-border); }
+.stat.proved::before { background: var(--bp-success); }
+.stat.mathlib::before { background: var(--bp-primary); }
+.stat.stated::before { background: var(--bp-warning); }
+.stat.not-ready::before { background: var(--bp-danger); }
+.stat.total::before { background: var(--bp-text-muted); }
+
+.stat-separator {
+  color: var(--bp-border);
+  margin: 0 0.25rem;
+}
 
 /* Node Styles */
 .node {
