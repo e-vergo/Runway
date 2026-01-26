@@ -336,7 +336,7 @@ def fullPageGraph (svg : Option String) (json : Option String) (_projectTitle : 
       -- Main content wrapper
       .tag "div" #[("class", "wrapper")] (
         .tag "div" #[("class", "content")] (
-          graphLegend ++
+          -- Legend is now embedded in the SVG itself (top-left corner)
           embedFullPageGraph svg json ++
           -- Hidden modal containers for node details
           generateStatementsContainer json
