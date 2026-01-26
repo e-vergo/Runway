@@ -276,6 +276,20 @@ def renderNode (node : NodeInfo) : RenderM Html := do
     ("class", s!"{envTypeLower}_thmwrapper sbs-container {envClass}")
   ] (latexColumn ++ leanColumn)
 
+/-! ## Modal Rendering for Dependency Graph -/
+
+/-- Render a node as a modal for the dependency graph (wrapping sbs-container in modal structure) -/
+def renderNodeModal (node : NodeInfo) : RenderM Html := do
+  let sbsContent ← renderNode node
+  -- Link to the node's location in the blueprint (use chapter page if available, otherwise index)
+  let linkUrl := s!"#{node.label}"
+  return DepGraph.wrapInModal node.label sbsContent linkUrl
+
+/-- Generate all modals for the dependency graph page -/
+def renderAllModals (nodes : Array NodeInfo) : RenderM Html := do
+  let modals ← nodes.mapM renderNodeModal
+  return .seq modals
+
 /-! ## Page Rendering -/
 
 /-- Render a page containing multiple nodes -/

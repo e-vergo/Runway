@@ -3,6 +3,7 @@ Copyright (c) 2025 Runway contributors. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 -/
 import Lean
+import Std.Data.HashMap
 import Verso.Output.Html
 
 /-!
@@ -272,8 +273,9 @@ def embedFullPageGraph (svg : Option String) (json : Option String) : Html :=
 
 /-! ## Node Modal Generation -/
 
-/-- Structure to hold node information for modal generation -/
-structure NodeInfo where
+/-- Structure to hold basic node information extracted from JSON for modal generation.
+    This is a minimal structure used only for JSON parsing; rich modals use pre-rendered HTML. -/
+private structure JsonNodeInfo where
   id : String
   label : String
   envType : String  -- "theorem", "definition", "lemma", etc.
@@ -295,15 +297,15 @@ private def extractStringValue (s : String) (key : String) : Option String :=
     else some quoteIdx[1]!
 
 /-- Parse a single node object from a JSON fragment -/
-private def parseOneNode (fragment : String) : Option NodeInfo := do
+private def parseOneNode (fragment : String) : Option JsonNodeInfo := do
   let id ← extractStringValue fragment "id"
   let label := (extractStringValue fragment "label").getD id
   let envType := (extractStringValue fragment "envType").getD "theorem"
   let url := (extractStringValue fragment "url").getD s!"#{id}"
   some { id, label, envType, url }
 
-/-- Parse the JSON data to extract node information -/
-def parseNodeInfo (json : String) : List NodeInfo :=
+/-- Parse the JSON data to extract basic node information -/
+def parseJsonNodeInfo (json : String) : List JsonNodeInfo :=
   -- Split by "id": to find each node-like fragment
   let parts := json.splitOn "\"id\":"
   -- Skip the first part (before any "id":)
@@ -320,8 +322,8 @@ def capitalize (s : String) : String :=
     | [] => s
     | c :: rest => String.ofList (c.toUpper :: rest)
 
-/-- Generate a single modal for a node -/
-def generateNodeModal (node : NodeInfo) : Html :=
+/-- Generate a basic modal for a node (fallback when no rich content available) -/
+def generateBasicNodeModal (node : JsonNodeInfo) : Html :=
   let envCapitalized := capitalize node.envType
   .tag "div" #[("class", "dep-modal-container"), ("id", s!"{node.id}_modal"), ("style", "display:none;")] (
     .tag "div" #[("class", "dep-modal-content")] (
@@ -338,20 +340,38 @@ def generateNodeModal (node : NodeInfo) : Html :=
     )
   )
 
-/-- Generate the #statements container with all node modals -/
+/-- Generate the #statements container with all node modals (basic version from JSON) -/
 def generateStatementsContainer (json : Option String) : Html :=
   match json with
   | none => .tag "div" #[("id", "statements"), ("style", "display:none;")] Html.empty
   | some j =>
-    let nodes := parseNodeInfo j
-    let modals := nodes.map generateNodeModal
+    let nodes := parseJsonNodeInfo j
+    let modals := nodes.map generateBasicNodeModal
     let combined := modals.foldl (· ++ ·) Html.empty
     .tag "div" #[("id", "statements"), ("style", "display:none;")] combined
 
+/-- Generate the statements container with pre-rendered modal content (rich version) -/
+def generateStatementsContainerFromHtml (modalsHtml : Html) : Html :=
+  .tag "div" #[("id", "statements"), ("style", "display:none;")] modalsHtml
+
+/-- Wrap a pre-rendered sbs-container in a modal structure -/
+def wrapInModal (nodeId : String) (sbsContent : Html) (linkUrl : String) : Html :=
+  .tag "div" #[("class", "dep-modal-container"), ("id", s!"{nodeId}_modal"), ("style", "display:none;")] (
+    .tag "div" #[("class", "dep-modal-content")] (
+      .tag "span" #[("class", "dep-closebtn")] (Html.text true "×") ++
+      sbsContent ++
+      .tag "div" #[("class", "dep-modal-links")] (
+        .tag "a" #[("href", linkUrl)] (Html.text true "View in Blueprint →")
+      )
+    )
+  )
+
 /-! ## Full Page Generation -/
 
-/-- Create a full HTML page for the dependency graph -/
-def fullPageGraph (svg : Option String) (json : Option String) (_projectTitle : String)
+/-- Create a full HTML page for the dependency graph.
+    If `modalsHtml` is provided, uses rich sbs-container modals; otherwise falls back to JSON-based basic modals. -/
+def fullPageGraph (svg : Option String) (json : Option String) (modalsHtml : Option Html)
+    (_projectTitle : String)
     (cssPath : String := "assets/blueprint.css") (jsPath : String := "assets/plastex.js")
     (versoJsPath : String := "assets/verso-code.js") : Html :=
   let mathjaxConfig := .tag "script" #[] (Html.text false r#"
@@ -398,7 +418,10 @@ def fullPageGraph (svg : Option String) (json : Option String) (_projectTitle : 
           -- Legend is now embedded in the SVG itself (top-left corner)
           embedFullPageGraph svg json ++
           -- Hidden modal containers for node details
-          generateStatementsContainer json
+          -- Use rich modals if provided, otherwise fall back to basic JSON-based modals
+          (match modalsHtml with
+           | some richModals => generateStatementsContainerFromHtml richModals
+           | none => generateStatementsContainer json)
         )
       ) ++
       -- Scripts
