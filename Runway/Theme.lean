@@ -1090,9 +1090,6 @@ def renderMultiPageIndex (site : BlueprintSite) : RenderM Html := do
   -- Progress section
   let progress := renderProgress site
 
-  -- Dependency graph link card (graph is on its own page)
-  let graphSection := DepGraph.graphLinkCard ""
-
   -- Chapter list
   let chapterList := divClass "chapter-list" (
     .tag "h2" #[] (Html.text true "Chapters") ++
@@ -1111,7 +1108,6 @@ def renderMultiPageIndex (site : BlueprintSite) : RenderM Html := do
   return divClass "index-page" (
     titleSection ++
     progress ++
-    graphSection ++
     chapterList
   )
 

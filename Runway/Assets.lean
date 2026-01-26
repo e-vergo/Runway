@@ -127,8 +127,8 @@ footer#footnotes h1{font-size:1.5rem;margin:0;margin-bottom:.5rem;color:#000}
 a.footnote{text-decoration:none}
 a.footnote sup:after{content:"]"}
 a.footnote sup:before{content:"["}
-body>header{background:linear-gradient(180deg,#6696bb 0,#396282);color:#fff;text-shadow:1px 2px 0 rgba(0,0,0,.8);display:flex;align-items:center;padding:.5rem}
-svg#toc-toggle{width:1.125rem;height:1.125rem;margin-right:.5rem;cursor:pointer}
+body>header{background:linear-gradient(180deg,#6696bb 0,#396282);color:#fff;display:flex;align-items:center;padding:.5rem}
+#toc-toggle{font-size:1.75rem;margin-right:.5rem;cursor:pointer}
 h1#doc_title{color:#fff;font-size:1.5rem;margin:auto}
 #doc_title a,#doc_title a:visited{text-decoration:none;color:#fff}
 .theindex li{list-style-type:none}
@@ -705,10 +705,11 @@ nav.toc li.active a {
 .stat {
   display: inline-flex;
   align-items: center;
-  padding: 0.25rem 0.75rem;
-  border-radius: 4px;
+  padding: 0.5rem 1rem;
+  border-radius: 6px;
   font-size: 0.875rem;
-  margin-right: 0.5rem;
+  margin-right: 0.75rem;
+  font-weight: 500;
 }
 
 .stat:last-child {
