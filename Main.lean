@@ -106,9 +106,7 @@ def loadConfig (path : FilePath) : IO Config := do
     | .ok config => return config
     | .error e => throw <| IO.userError s!"Failed to parse config: {e}"
   else
-    -- Return default config if file doesn't exist
-    IO.eprintln s!"Warning: Config file not found at {path}, using defaults"
-    return { projectName := "Blueprint" }
+    throw <| IO.userError s!"ERROR: Config file not found at {path}. A config file with 'assetsDir' is required."
 
 /-- Load the dependency graph SVG file if it exists -/
 def loadDepGraphSvg (dressedDir : FilePath) : IO (Option String) := do
@@ -459,8 +457,38 @@ def runBuild (cliConfig : CLIConfig) : IO UInt32 := do
     -- Multi-page mode with chapter pages
     generateMultiPageSite defaultTheme site outputDir
 
-  -- Write additional assets
-  Assets.writeAssets outputDir
+  -- Copy assets from config.assetsDir to output
+  let assetsOutputDir := outputDir / "assets"
+  IO.FS.createDirAll assetsOutputDir
+
+  -- Copy CSS (required - no fallback)
+  let srcCss := config.assetsDir / "blueprint.css"
+  let dstCss := assetsOutputDir / "blueprint.css"
+  if ← srcCss.pathExists then
+    let cssContent ← IO.FS.readFile srcCss
+    IO.FS.writeFile dstCss cssContent
+    IO.println s!"  - Copied {srcCss} to {dstCss}"
+  else
+    throw <| IO.userError s!"ERROR: Required asset file not found: {srcCss}"
+
+  -- Copy JS files (required - no fallback)
+  let srcPlastex := config.assetsDir / "plastex.js"
+  let dstPlastex := assetsOutputDir / "plastex.js"
+  if ← srcPlastex.pathExists then
+    let plastexContent ← IO.FS.readFile srcPlastex
+    IO.FS.writeFile dstPlastex plastexContent
+    IO.println s!"  - Copied {srcPlastex} to {dstPlastex}"
+  else
+    throw <| IO.userError s!"ERROR: Required asset file not found: {srcPlastex}"
+
+  let srcVerso := config.assetsDir / "verso-code.js"
+  let dstVerso := assetsOutputDir / "verso-code.js"
+  if ← srcVerso.pathExists then
+    let versoContent ← IO.FS.readFile srcVerso
+    IO.FS.writeFile dstVerso versoContent
+    IO.println s!"  - Copied {srcVerso} to {dstVerso}"
+  else
+    throw <| IO.userError s!"ERROR: Required asset file not found: {srcVerso}"
 
   IO.println s!"Site generated at {outputDir}"
   IO.println s!"  - {site.nodes.size} nodes"

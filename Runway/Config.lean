@@ -30,6 +30,8 @@ structure Config where
   outputDir : System.FilePath := "_site"
   /-- Path to the blueprint.tex file for chapter-based navigation -/
   blueprintTexPath : Option String := none
+  /-- Directory containing static assets (blueprint.css, plastex.js, verso-code.js) -/
+  assetsDir : System.FilePath
   deriving Inhabited, Repr
 
 instance : ToJson Config where
@@ -40,7 +42,8 @@ instance : ToJson Config where
     ("docgen4Url", match c.docgen4Url with | some u => .str u | none => .null),
     ("baseUrl", .str c.baseUrl),
     ("outputDir", .str c.outputDir.toString),
-    ("blueprintTexPath", match c.blueprintTexPath with | some p => .str p | none => .null)
+    ("blueprintTexPath", match c.blueprintTexPath with | some p => .str p | none => .null),
+    ("assetsDir", .str c.assetsDir.toString)
   ]
 
 instance : FromJson Config where
@@ -52,6 +55,7 @@ instance : FromJson Config where
     let baseUrl : String ← j.getObjValAs? String "baseUrl" <|> pure "/"
     let outputDir : String ← j.getObjValAs? String "outputDir" <|> pure "_site"
     let blueprintTexPath : Option String := (j.getObjValAs? String "blueprintTexPath").toOption
+    let assetsDir : String ← j.getObjValAs? String "assetsDir"
     return {
       title := title
       projectName := projectName
@@ -60,6 +64,7 @@ instance : FromJson Config where
       baseUrl := baseUrl
       outputDir := outputDir
       blueprintTexPath := blueprintTexPath
+      assetsDir := assetsDir
     }
 
 end Runway

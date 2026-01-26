@@ -281,11 +281,13 @@ def renderProgress (site : BlueprintSite) : Html :=
   let counts := site.statusCounts
   let total := site.totalNodes
   let pct := site.completionPercentage
+  -- Round to integer for display
+  let pctRounded := pct.round.toUInt32
 
   let bar := divClass "progress-bar" (
     .tag "div" #[
       ("class", "progress-fill"),
-      ("style", s!"width: {pct}%")
+      ("style", s!"width: {pctRounded}%")
     ] Html.empty
   )
 
@@ -301,7 +303,7 @@ def renderProgress (site : BlueprintSite) : Html :=
     .tag "h2" #[] (Html.text true "Progress") ++
     bar ++
     stats ++
-    spanClass "progress-percent" (Html.text true s!"{pct.toString}% complete")
+    divClass "progress-label" (Html.text true s!"{pctRounded}%")
   )
 
 /-! ## Index Page Rendering -/
@@ -397,8 +399,8 @@ def renderSite (site : BlueprintSite) : RenderM Html := do
       .tag "meta" #[("charset", "UTF-8")] Html.empty ++
       .tag "meta" #[("name", "viewport"), ("content", "width=device-width, initial-scale=1")] Html.empty ++
       .tag "title" #[] (Html.text true config.title) ++
-      .tag "link" #[("rel", "stylesheet"), ("href", s!"{toRoot}runway.css")] Html.empty ++
-      .tag "script" #[("src", s!"{toRoot}verso-code.js")] Html.empty ++
+      .tag "link" #[("rel", "stylesheet"), ("href", s!"{toRoot}assets/blueprint.css")] Html.empty ++
+      .tag "script" #[("src", s!"{toRoot}assets/verso-code.js")] Html.empty ++
       -- Embed graph data for JavaScript
       .tag "script" #[("id", "graph-data"), ("type", "application/json")]
         (Html.text false (renderGraphJson site))

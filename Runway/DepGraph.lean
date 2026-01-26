@@ -293,7 +293,8 @@ def generateStatementsContainer (json : Option String) : Html :=
 
 /-- Create a full HTML page for the dependency graph -/
 def fullPageGraph (svg : Option String) (json : Option String) (_projectTitle : String)
-    (cssPath : String := "runway.css") (jsPath : String := "runway.js") : Html :=
+    (cssPath : String := "assets/blueprint.css") (jsPath : String := "assets/plastex.js")
+    (versoJsPath : String := "assets/verso-code.js") : Html :=
   let mathjaxConfig := .tag "script" #[] (Html.text false r#"
     MathJax = {
       tex: {
@@ -345,7 +346,8 @@ def fullPageGraph (svg : Option String) (json : Option String) (_projectTitle : 
       .tag "script" #[("src", "https://code.jquery.com/jquery-3.7.1.min.js"),
                       ("integrity", "sha256-/JqT3SQfawRcv/BIHPThkBvs0OEvtFFmqPF/lYI/Cxo="),
                       ("crossorigin", "anonymous")] Html.empty ++
-      .tag "script" #[("src", jsPath)] Html.empty
+      .tag "script" #[("src", jsPath)] Html.empty ++
+      .tag "script" #[("src", versoJsPath)] Html.empty
     )
   )
 
