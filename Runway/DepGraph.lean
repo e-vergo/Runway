@@ -66,6 +66,45 @@ private def graphToolbar : Html :=
       (.text true "Fit")
   )
 
+/-- Compact legend for the dependency graph (static HTML, not in SVG) -/
+private def graphLegendCompact : Html :=
+  .tag "div" #[("class", "dep-graph-legend")] (
+    .tag "div" #[("class", "legend-title")] (.text true "Legend") ++
+    .tag "div" #[("class", "legend-items")] (
+      .tag "div" #[("class", "legend-item")] (
+        .tag "span" #[("class", "legend-swatch stated")] Html.empty ++
+        .tag "span" #[] (.text true "Stated")
+      ) ++
+      .tag "div" #[("class", "legend-item")] (
+        .tag "span" #[("class", "legend-swatch proven")] Html.empty ++
+        .tag "span" #[] (.text true "Proven")
+      ) ++
+      .tag "div" #[("class", "legend-item")] (
+        .tag "span" #[("class", "legend-swatch not-ready")] Html.empty ++
+        .tag "span" #[] (.text true "Not Ready")
+      ) ++
+      .tag "div" #[("class", "legend-item")] (
+        .tag "span" #[("class", "legend-swatch mathlib")] Html.empty ++
+        .tag "span" #[] (.text true "Mathlib")
+      ) ++
+      .tag "div" #[("class", "legend-item")] (
+        .tag "span" #[("class", "legend-shape ellipse")] Html.empty ++
+        .tag "span" #[] (.text true "Theorems/Lemmas")
+      ) ++
+      .tag "div" #[("class", "legend-item")] (
+        .tag "span" #[("class", "legend-shape box")] Html.empty ++
+        .tag "span" #[] (.text true "Definitions")
+      )
+    )
+  )
+
+/-- Combined controls container (legend + toolbar) -/
+private def graphControls : Html :=
+  .tag "div" #[("class", "dep-graph-controls")] (
+    graphLegendCompact ++
+    graphToolbar
+  )
+
 /-- Embed the SVG in an interactive container -/
 def embedSvg (svg : String) : Html :=
   .tag "div" #[("class", "dep-graph-container")] (
@@ -194,12 +233,14 @@ private def graphLegend : Html :=
 def embedFullPageGraph (svg : Option String) (json : Option String) : Html :=
   let svgHtml := match svg with
     | some s =>
-      .tag "div" #[("class", "dep-graph-container dep-graph-fullpage")] (
-        graphToolbar ++
-        .tag "div" #[("class", "dep-graph-viewport"), ("id", "dep-graph-viewport"),
-                     ("style", "height: 90vh;")] (
-          .tag "div" #[("class", "dep-graph-svg"), ("id", "dep-graph")] (
-            Html.text false s
+      .tag "div" #[("class", "dep-graph-wrapper")] (
+        graphControls ++
+        .tag "div" #[("class", "dep-graph-container dep-graph-fullpage")] (
+          .tag "div" #[("class", "dep-graph-viewport"), ("id", "dep-graph-viewport"),
+                       ("style", "height: 90vh;")] (
+            .tag "div" #[("class", "dep-graph-svg"), ("id", "dep-graph")] (
+              Html.text false s
+            )
           )
         )
       )
