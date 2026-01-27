@@ -472,7 +472,7 @@ where
         )
       )
 
-/-- Render the 2x2 dashboard grid -/
+/-- Render the dashboard grid -/
 def renderDashboard (site : BlueprintSite) : Html :=
   divClass "dashboard-grid" (
     -- Top row: Progress (fixed width) + Key Theorems (fills remaining space)
@@ -480,10 +480,9 @@ def renderDashboard (site : BlueprintSite) : Html :=
       divClass "dashboard-cell progress-cell" (renderProgress site) ++
       divClass "dashboard-cell key-theorems-cell" (renderKeyTheorems site)
     ) ++
-    -- Bottom row: Messages + Project Notes (equal width, spanning full width)
+    -- Bottom row: Project Notes spanning full width
     divClass "dashboard-row bottom-row" (
-      divClass "dashboard-cell" (renderMessages site) ++
-      divClass "dashboard-cell" (renderProjectNotes site)
+      divClass "dashboard-cell notes-cell" (renderProjectNotes site)
     )
   )
 
