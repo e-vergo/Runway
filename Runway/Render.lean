@@ -309,8 +309,8 @@ private def renderPieSlice (count : Nat) (total : Nat) (offset : Float) (color :
     (Html.empty, offset)
   else
     let pct := (count.toFloat / total.toFloat) * 100.0
-    -- For stroke-dasharray technique on a circle with r=16 (circumference = 2*pi*16 ≈ 100.53)
-    let circumference := 100.53
+    -- For stroke-dasharray technique on a circle with r=8 (circumference = 2*pi*8 ≈ 50.27)
+    let circumference := 50.27
     let dashLen := pct * circumference / 100.0
     let dashOffset := (100.0 - offset) * circumference / 100.0
     let slice := .tag "circle" #[
@@ -326,14 +326,12 @@ private def renderPieSlice (count : Nat) (total : Nat) (offset : Float) (color :
 
 /-- Render a legend item with colored swatch -/
 private def renderLegendItem (count : Nat) (label : String) (cssClass : String) : Html :=
-  if count == 0 then Html.empty
-  else
-    divClass "legend-item" (
-      .tag "span" #[("class", s!"legend-swatch {cssClass}")] Html.empty ++
-      .tag "span" #[] (Html.text true s!"{count} {label}")
-    )
+  divClass "legend-item" (
+    .tag "span" #[("class", s!"legend-swatch {cssClass}")] Html.empty ++
+    .tag "span" #[] (Html.text true s!"{count} {label}")
+  )
 
-/-- Render progress statistics as compact pie chart + legend -/
+/-- Render progress statistics as stats box with pie chart + legend -/
 def renderProgress (site : BlueprintSite) : Html :=
   let counts := site.statusCounts
   let total := site.totalNodes
@@ -351,14 +349,12 @@ def renderProgress (site : BlueprintSite) : Html :=
     let (slice7, off7) := renderPieSlice counts.mathlibReady total off6 "#4169E1"
     let (slice8, _) := renderPieSlice counts.inMathlib total off7 "#191970"
 
-    let pie := .tag "svg" #[
+    let pieSlices := .tag "svg" #[
       ("class", "stats-pie"),
-      ("viewBox", "0 0 32 32"),
-      ("width", "64"),
-      ("height", "64")
+      ("viewBox", "0 0 32 32")
     ] (slice1 ++ slice2 ++ slice3 ++ slice4 ++ slice5 ++ slice6 ++ slice7 ++ slice8)
 
-    let legend := divClass "stats-legend" (
+    let legendItems :=
       renderLegendItem counts.notReady "not ready" "not-ready" ++
       renderLegendItem counts.stated "stated" "stated" ++
       renderLegendItem counts.ready "ready" "ready" ++
@@ -367,11 +363,31 @@ def renderProgress (site : BlueprintSite) : Html :=
       renderLegendItem counts.fullyProven "fully proven" "fully-proven" ++
       renderLegendItem counts.mathlibReady "mathlib ready" "mathlib-ready" ++
       renderLegendItem counts.inMathlib "in mathlib" "in-mathlib"
-    )
 
-    divClass "progress-section" (
-      .tag "h2" #[] (Html.text true "Progress") ++
-      divClass "stats-compact" (pie ++ legend)
+    divClass "stats-box" (
+      -- Title
+      divClass "stats-title" (Html.text true "Progress") ++
+      -- Separator
+      divClass "stats-separator" Html.empty ++
+      -- Pie + Legend row
+      divClass "stats-main" (
+        divClass "stats-pie-container" pieSlices ++
+        divClass "stats-legend-separator" Html.empty ++
+        divClass "stats-legend" legendItems
+      ) ++
+      -- Separator
+      divClass "stats-separator" Html.empty ++
+      -- Stats summary with percentages
+      let provenCount := counts.proven + counts.fullyProven
+      let provenPct := if total > 0 then (provenCount.toFloat / total.toFloat * 100.0).toUInt32 else 0
+      let sorryPct := if total > 0 then (counts.hasSorry.toFloat / total.toFloat * 100.0).toUInt32 else 0
+      let otherPct := 100 - provenPct - sorryPct
+      divClass "stats-summary" (
+        divClass "stats-total" (Html.text true s!"{total} total declarations") ++
+        divClass "stats-percentages" (
+          Html.text true s!"{provenPct}% proven · {sorryPct}% sorry · {otherPct}% other"
+        )
+      )
     )
 
 /-! ## Index Page Rendering -/
