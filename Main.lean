@@ -550,6 +550,16 @@ def runBuild (cliConfig : CLIConfig) : IO UInt32 := do
   let assetsOutputDir := outputDir / "assets"
   IO.FS.createDirAll assetsOutputDir
 
+  -- Copy common.css (required - must load before blueprint.css)
+  let srcCommonCss := config.assetsDir / "common.css"
+  let dstCommonCss := assetsOutputDir / "common.css"
+  if ← srcCommonCss.pathExists then
+    let commonCssContent ← IO.FS.readFile srcCommonCss
+    IO.FS.writeFile dstCommonCss commonCssContent
+    IO.println s!"  - Copied {srcCommonCss} to {dstCommonCss}"
+  else
+    throw <| IO.userError s!"ERROR: Required asset file not found: {srcCommonCss}"
+
   -- Copy CSS (required - no fallback)
   let srcCss := config.assetsDir / "blueprint.css"
   let dstCss := assetsOutputDir / "blueprint.css"

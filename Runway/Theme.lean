@@ -161,7 +161,8 @@ def primaryTemplate : Template := fun content => do
       .tag "meta" #[("charset", "UTF-8")] Html.empty ++
       .tag "meta" #[("name", "viewport"), ("content", "width=device-width, initial-scale=1")] Html.empty ++
       .tag "title" #[] (Html.text true config.title) ++
-      -- Local CSS
+      -- Local CSS (common.css must load before blueprint.css)
+      .tag "link" #[("rel", "stylesheet"), ("href", s!"{toRoot}assets/common.css")] Html.empty ++
       .tag "link" #[("rel", "stylesheet"), ("href", s!"{toRoot}assets/blueprint.css")] Html.empty ++
       .tag "link" #[("rel", "icon"), ("href", "data:,")] Html.empty ++
       -- MathJax config and script
@@ -249,7 +250,8 @@ def primaryTemplateWithSidebar (chapters : Array ChapterInfo) (currentSlug : Opt
       .tag "meta" #[("charset", "UTF-8")] Html.empty ++
       .tag "meta" #[("name", "viewport"), ("content", "width=device-width, initial-scale=1")] Html.empty ++
       .tag "title" #[] (Html.text true config.title) ++
-      -- Local CSS
+      -- Local CSS (common.css must load before blueprint.css and paper.css)
+      .tag "link" #[("rel", "stylesheet"), ("href", s!"{toRoot}assets/common.css")] Html.empty ++
       .tag "link" #[("rel", "stylesheet"), ("href", s!"{toRoot}assets/blueprint.css")] Html.empty ++
       paperCssLink ++
       .tag "link" #[("rel", "icon"), ("href", "data:,")] Html.empty ++

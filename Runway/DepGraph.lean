@@ -443,6 +443,8 @@ def fullPageGraph (svg : Option String) (json : Option String) (modalsHtml : Opt
       .tag "meta" #[("charset", "UTF-8")] Html.empty ++
       .tag "meta" #[("name", "viewport"), ("content", "width=device-width, initial-scale=1")] Html.empty ++
       .tag "title" #[] (Html.text true "Dependency Graph") ++
+      -- common.css must load before blueprint.css
+      .tag "link" #[("rel", "stylesheet"), ("href", "assets/common.css")] Html.empty ++
       .tag "link" #[("rel", "stylesheet"), ("href", cssPath)] Html.empty ++
       .tag "link" #[("rel", "icon"), ("href", "data:,")] Html.empty ++
       mathjaxConfig ++
