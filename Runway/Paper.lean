@@ -138,8 +138,7 @@ def renderFull (info : PaperNodeInfo) : Html :=
    | some proofText =>
      .tag "div" #[("class", "paper-proof")] (
        .tag "span" #[("class", "paper-proof-header")] (Html.text true "Proof. ") ++
-       .tag "span" #[("class", "paper-proof-body")] (Html.text false proofText) ++
-       .tag "span" #[("class", "paper-qed")] (Html.text true " \u25A1")
+       .tag "span" #[("class", "paper-proof-body")] (Html.text false proofText)
      )
    | none => Html.empty)
 
@@ -156,8 +155,7 @@ def renderProofOnly (info : PaperNodeInfo) : Html :=
       .tag "span" #[("class", "paper-proof-header")] (
         Html.text true s!"Proof of {capitalize info.envType} {info.displayNumber}. "
       ) ++
-      .tag "span" #[("class", "paper-proof-body")] (Html.text false proofText) ++
-      .tag "span" #[("class", "paper-qed")] (Html.text true " \u25A1")
+      .tag "span" #[("class", "paper-proof-body")] (Html.text false proofText)
     )
   | none => Html.empty
 
