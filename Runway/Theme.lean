@@ -351,9 +351,9 @@ def generateSite (theme : Theme) (site : BlueprintSite) (outputDir : System.File
   let htmlStr := Html.doctype ++ "\n" ++ html.asString
   IO.FS.writeFile (outputDir / "index.html") htmlStr
 
-  -- Generate dedicated dependency graph page with rich modals
+  -- Generate dedicated dependency graph page with rich modals and sidebar
   let (modalsHtml, _) ← renderAllModals site.nodes |>.run ctx
-  let depGraphPage := DepGraph.fullPageGraph site.depGraphSvg site.depGraphJson (some modalsHtml) site.config.title
+  let depGraphPage := DepGraph.fullPageGraph site.depGraphSvg site.depGraphJson (some modalsHtml) site.config.title site.chapters (some site.config)
   let depGraphHtmlStr := Html.doctype ++ "\n" ++ depGraphPage.asString
   IO.FS.writeFile (outputDir / "dep_graph.html") depGraphHtmlStr
 
@@ -496,9 +496,9 @@ def generateMultiPageSite (_theme : Theme) (site : BlueprintSite) (outputDir : S
     IO.FS.writeFile (outputDir / s!"{chap.slug}.html") chapterHtmlStr
     IO.println s!"  Generated {chap.slug}.html"
 
-  -- Generate dedicated dependency graph page with rich modals
+  -- Generate dedicated dependency graph page with rich modals and sidebar
   let (modalsHtml, _) ← renderAllModals site.nodes |>.run ctx
-  let depGraphPage := DepGraph.fullPageGraph site.depGraphSvg site.depGraphJson (some modalsHtml) site.config.title
+  let depGraphPage := DepGraph.fullPageGraph site.depGraphSvg site.depGraphJson (some modalsHtml) site.config.title site.chapters (some site.config)
   let depGraphHtmlStr := Html.doctype ++ "\n" ++ depGraphPage.asString
   IO.FS.writeFile (outputDir / "dep_graph.html") depGraphHtmlStr
   IO.println s!"  Generated dep_graph.html"

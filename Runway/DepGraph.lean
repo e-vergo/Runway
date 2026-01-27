@@ -5,6 +5,8 @@ Released under Apache 2.0 license as described in the file LICENSE.
 import Lean
 import Std.Data.HashMap
 import Verso.Output.Html
+import Runway.Config
+import Runway.Site
 
 /-!
 # Dependency Graph Loading and Embedding
@@ -368,10 +370,53 @@ def wrapInModal (nodeId : String) (sbsContent : Html) (linkUrl : String) : Html 
 
 /-! ## Full Page Generation -/
 
-/-- Create a full HTML page for the dependency graph.
+/-- Render sidebar navigation for the dependency graph page.
+    Duplicated from Theme.lean to avoid circular imports. -/
+private def renderDepGraphSidebar (chapters : Array ChapterInfo) (toRoot : String) (config : Config) : Html :=
+  let homeItem := .tag "li" #[] (
+    .tag "a" #[("href", s!"{toRoot}index.html")] (Html.text true "Blueprint Home")
+  )
+
+  -- Chapter items
+  let chapterItems := chapters.map fun chapter =>
+    let href := s!"{toRoot}{chapter.slug}.html"
+    let chapterPrefix := if chapter.isAppendix then "Appendix" else s!"{chapter.number}."
+    .tag "li" #[] (
+      .tag "a" #[("href", href)] (Html.text true s!"{chapterPrefix} {chapter.title}")
+    )
+
+  -- Separator element
+  let separator := .tag "li" #[("class", "nav-separator")] Html.empty
+
+  -- Dependency graph link (current page, so active)
+  let graphItem := .tag "li" #[("class", "active")] (
+    .tag "a" #[("href", s!"{toRoot}dep_graph.html")] (Html.text true "Dependency Graph")
+  )
+
+  -- Paper link
+  let paperItem := .tag "li" #[] (
+    .tag "a" #[("href", s!"{toRoot}paper.html")] (Html.text true "Paper")
+  )
+
+  -- External links (GitHub, API Docs)
+  let githubItem := match config.githubUrl with
+    | some url => .tag "li" #[] (.tag "a" #[("href", url), ("target", "_blank")] (Html.text true "GitHub"))
+    | none => Html.empty
+
+  let docsItem := match config.docgen4Url with
+    | some url => .tag "li" #[] (.tag "a" #[("href", url), ("target", "_blank")] (Html.text true "API Docs"))
+    | none => Html.empty
+
+  .tag "nav" #[("class", "toc")] (
+    .tag "ul" #[("class", "sub-toc-0")] (
+      .seq #[homeItem] ++ .seq chapterItems ++ .seq #[separator, graphItem, paperItem, separator, githubItem, docsItem]
+    )
+  )
+
+/-- Create a full HTML page for the dependency graph with sidebar navigation.
     If `modalsHtml` is provided, uses rich sbs-container modals; otherwise falls back to JSON-based basic modals. -/
 def fullPageGraph (svg : Option String) (json : Option String) (modalsHtml : Option Html)
-    (_projectTitle : String)
+    (_projectTitle : String) (chapters : Array ChapterInfo := #[]) (config : Option Config := none)
     (cssPath : String := "assets/blueprint.css") (jsPath : String := "assets/plastex.js")
     (versoJsPath : String := "assets/verso-code.js") : Html :=
   let mathjaxConfig := .tag "script" #[] (Html.text false r#"
@@ -387,6 +432,12 @@ def fullPageGraph (svg : Option String) (json : Option String) (modalsHtml : Opt
     };
   "#)
 
+  -- Render sidebar if chapters and config are provided
+  let toRoot := ""  -- dep_graph.html is at root level
+  let sidebar := match config with
+    | some cfg => renderDepGraphSidebar chapters toRoot cfg
+    | none => Html.empty
+
   .tag "html" #[("lang", "en")] (
     .tag "head" #[] (
       .tag "meta" #[("charset", "UTF-8")] Html.empty ++
@@ -400,20 +451,21 @@ def fullPageGraph (svg : Option String) (json : Option String) (modalsHtml : Opt
       .tag "script" #[("src", "https://unpkg.com/@popperjs/core@2")] Html.empty ++
       .tag "script" #[("src", "https://unpkg.com/tippy.js@6")] Html.empty ++
       .tag "link" #[("rel", "stylesheet"),
-                    ("href", "https://unpkg.com/tippy.js@6/themes/light-border.css")] Html.empty
+                    ("href", "https://unpkg.com/tippy.js@6/themes/light-border.css")] Html.empty ++
+      .tag "script" #[("src", "https://cdn.jsdelivr.net/npm/marked/marked.min.js")] Html.empty
     ) ++
     .tag "body" #[("class", "dep-graph-page")] (
       -- Header matching plasTeX style
       .tag "header" #[] (
         .tag "nav" #[("class", "header")] (
           .tag "div" #[("class", "nav-wrapper")] (
-            .tag "a" #[("class", "toc"), ("href", "index.html")] (Html.text true "Home") ++
-            .tag "h1" #[("id", "doc_title")] (Html.text true "Dependencies")
+            .tag "span" #[("id", "toc-toggle")] (Html.text true "☰")
           )
         )
       ) ++
-      -- Main content wrapper
+      -- Main content wrapper with sidebar
       .tag "div" #[("class", "wrapper")] (
+        sidebar ++
         .tag "div" #[("class", "content")] (
           -- Legend is now embedded in the SVG itself (top-left corner)
           embedFullPageGraph svg json ++
