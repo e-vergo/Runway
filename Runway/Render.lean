@@ -459,10 +459,16 @@ def renderKeyTheorems (site : BlueprintSite) : Html :=
                   spanClass "kt-label" (Html.text true (node.displayNumber.getD node.label)) ++
                   divClass "kt-statement" (Html.text false node.statementHtml)
                 ) ++
-                -- Right: Lean signature
+                -- Right: Lean signature with hover data (matches renderNode pattern)
                 divClass "kt-lean" (
                   match node.signatureHtml with
-                  | some sig => .tag "code" #[("class", "hl lean")] (Html.text false sig)
+                  | some sig =>
+                    let hoverAttr := match node.hoverData with
+                      | some hd => #[("data-lean-hovers", hd)]
+                      | none => #[]
+                    .tag "pre" (#[("class", "lean-code hl lean")] ++ hoverAttr) (
+                      .tag "code" #[("class", "hl lean")] (Html.text false sig)
+                    )
                   | none => Html.text true (node.declNames.map toString |>.toList |> ", ".intercalate)
                 )
               )
