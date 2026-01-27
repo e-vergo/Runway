@@ -183,10 +183,7 @@ def primaryTemplate : Template := fun content => do
         .tag "nav" #[("class", "header")] (
           divClass "nav-wrapper" (
             -- Hamburger menu for mobile (left side)
-            .tag "span" #[("id", "toc-toggle")] (Html.text true "☰") ++
-            .tag "a" #[("class", "brand-logo"), ("href", s!"{toRoot}index.html")] (
-              Html.text true config.title
-            )
+            .tag "span" #[("id", "toc-toggle")] (Html.text true "☰")
           )
         )
       ) ++
@@ -275,10 +272,7 @@ def primaryTemplateWithSidebar (chapters : Array ChapterInfo) (currentSlug : Opt
         .tag "nav" #[("class", "header")] (
           divClass "nav-wrapper" (
             -- Hamburger menu for mobile (left side)
-            .tag "span" #[("id", "toc-toggle")] (Html.text true "☰") ++
-            .tag "a" #[("class", "brand-logo"), ("href", s!"{toRoot}index.html")] (
-              Html.text true config.title
-            )
+            .tag "span" #[("id", "toc-toggle")] (Html.text true "☰")
           )
         )
       ) ++

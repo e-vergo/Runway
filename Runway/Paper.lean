@@ -173,48 +173,77 @@ def renderPaperPage (config : Config) (content : Html) : Html :=
 
 /-! ## Document Conversion -/
 
+/-- Tag types for tracking which HTML tags are open -/
+private inductive TagType
+  | code   -- \texttt{...}
+  | em     -- \emph{...}
+  | strong -- \textbf{...}
+  deriving BEq
+
+private def TagType.closeTag : TagType → String
+  | .code => "</code>"
+  | .em => "</em>"
+  | .strong => "</strong>"
+
 /-- Convert LaTeX text commands to HTML (for content outside math mode).
     Handles: \texttt{...} -> <code>...</code>
+             \emph{...} -> <em>...</em>
+             \textbf{...} -> <strong>...</strong>
     Note: Content inside $...$ or \[...\] is left untouched for MathJax. -/
 partial def latexTextToHtml (s : String) : String :=
-  go s.toList "" false 0
+  go s.toList "" false []
 where
-  go (input : List Char) (acc : String) (inMath : Bool) (braceDepth : Nat) : String :=
+  go (input : List Char) (acc : String) (inMath : Bool) (tagStack : List TagType) : String :=
     match input with
     | [] => acc
     | '\\' :: 't' :: 'e' :: 'x' :: 't' :: 't' :: 't' :: '{' :: rest =>
       if inMath then
         -- Inside math mode, keep as-is
-        go rest (acc ++ "\\texttt{") inMath braceDepth
+        go rest (acc ++ "\\texttt{") inMath tagStack
       else
         -- Convert \texttt{ to <code>
-        go rest (acc ++ "<code>") inMath (braceDepth + 1)
+        go rest (acc ++ "<code>") inMath (.code :: tagStack)
+    | '\\' :: 't' :: 'e' :: 'x' :: 't' :: 'b' :: 'f' :: '{' :: rest =>
+      if inMath then
+        -- Inside math mode, keep as-is
+        go rest (acc ++ "\\textbf{") inMath tagStack
+      else
+        -- Convert \textbf{ to <strong>
+        go rest (acc ++ "<strong>") inMath (.strong :: tagStack)
+    | '\\' :: 'e' :: 'm' :: 'p' :: 'h' :: '{' :: rest =>
+      if inMath then
+        -- Inside math mode, keep as-is
+        go rest (acc ++ "\\emph{") inMath tagStack
+      else
+        -- Convert \emph{ to <em>
+        go rest (acc ++ "<em>") inMath (.em :: tagStack)
     | '$' :: '$' :: rest =>
       -- Display math $$ toggles
-      go rest (acc ++ "$$") (!inMath) braceDepth
+      go rest (acc ++ "$$") (!inMath) tagStack
     | '$' :: rest =>
       -- Inline math $ toggles
-      go rest (acc ++ "$") (!inMath) braceDepth
+      go rest (acc ++ "$") (!inMath) tagStack
     | '\\' :: '[' :: rest =>
       -- Display math \[ starts
-      go rest (acc ++ "\\[") true braceDepth
+      go rest (acc ++ "\\[") true tagStack
     | '\\' :: ']' :: rest =>
       -- Display math \] ends
-      go rest (acc ++ "\\]") false braceDepth
+      go rest (acc ++ "\\]") false tagStack
     | '\\' :: '(' :: rest =>
       -- Inline math \( starts
-      go rest (acc ++ "\\(") true braceDepth
+      go rest (acc ++ "\\(") true tagStack
     | '\\' :: ')' :: rest =>
       -- Inline math \) ends
-      go rest (acc ++ "\\)") false braceDepth
+      go rest (acc ++ "\\)") false tagStack
     | '}' :: rest =>
-      if braceDepth > 0 && !inMath then
-        -- Close a <code> tag
-        go rest (acc ++ "</code>") inMath (braceDepth - 1)
+      if inMath then
+        go rest (acc ++ "}") inMath tagStack
       else
-        go rest (acc ++ "}") inMath braceDepth
+        match tagStack with
+        | openTag :: remaining => go rest (acc ++ openTag.closeTag) inMath remaining
+        | [] => go rest (acc ++ "}") inMath tagStack
     | c :: rest =>
-      go rest (acc.push c) inMath braceDepth
+      go rest (acc.push c) inMath tagStack
 
 /-- Convert NodeStatus to VerificationLevel -/
 def nodeStatusToVerificationLevel (status : NodeStatus) : VerificationLevel :=
