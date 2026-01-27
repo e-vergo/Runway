@@ -128,44 +128,6 @@ def loadDepGraphJson (dressedDir : FilePath) : IO (Option String) := do
   else
     return none
 
-/-- Find and load decl.html and decl.hovers.json for a node by searching the dressed directory iteratively -/
-def loadCodeHtmlAndHovers (dressedDir : FilePath) (sanitizedLabel : String) : IO (Option String × Option String) := do
-  -- Search for the decl.html file in any module subdirectory
-  -- The path is: dressed/{Module/Path}/{sanitized-label}/decl.html
-  -- Use iterative BFS instead of recursion to avoid termination issues
-  let mut queue : Array FilePath := #[dressedDir]
-  let mut found : Option FilePath := none
-
-  while !queue.isEmpty && found.isNone do
-    match queue.back? with
-    | none => break
-    | some dir =>
-      queue := queue.pop
-      for entry in ← dir.readDir do
-        if ← entry.path.isDir then
-          if entry.fileName == sanitizedLabel then
-            -- Found the label directory
-            found := some entry.path
-          else
-            queue := queue.push entry.path
-
-  match found with
-  | some declDir =>
-    -- Load HTML
-    let htmlPath := declDir / "decl.html"
-    let codeHtml ← if ← htmlPath.pathExists then
-      some <$> IO.FS.readFile htmlPath
-    else
-      pure none
-    -- Load hover data
-    let hoversPath := declDir / "decl.hovers.json"
-    let hoverData ← if ← hoversPath.pathExists then
-      some <$> IO.FS.readFile hoversPath
-    else
-      pure none
-    return (codeHtml, hoverData)
-  | none => return (none, none)
-
 /-- Load and parse the blueprint.tex file to extract chapters -/
 def loadBlueprintChapters (config : Config) (allNodes : Array NodeInfo) : IO (Array ChapterInfo) := do
   match config.blueprintTexPath with
@@ -381,9 +343,6 @@ def buildSiteFromArtifacts (config : Config) (dressedDir : FilePath) : IO Bluepr
     let normalizedId := node.id.replace ":" "-"
     -- Look up artifact by normalized id
     let artifact := declArtifacts.get? normalizedId
-    -- Load hover data from decl.hovers.json (codeHtml from decl.html is the full decorated code,
-    -- so we prefer the clean signature+proof from the base64-decoded fields in decl.tex)
-    let (_, hoverData) ← loadCodeHtmlAndHovers dressedDir normalizedId
 
     -- Extract Lean signature and proof body HTML separately for right column
     let signatureHtml := match artifact with
@@ -392,6 +351,10 @@ def buildSiteFromArtifacts (config : Config) (dressedDir : FilePath) : IO Bluepr
     let proofBodyHtml := match artifact with
       | some art => art.leanProofBodyHtml.filter (·.isEmpty == false)
       | none => none
+
+    -- Use hover data from artifact (already loaded during initial traversal)
+    -- The hoverData comes from \leanhoverdata{base64} in decl.tex, decoded by parseDeclTex
+    let hoverData := artifact.bind (·.hoverData)
 
     -- Get node metadata from manifest (use original node.id for lookup)
     let keyTheorem := manifest.isKeyTheorem node.id
@@ -431,7 +394,7 @@ def buildSiteFromArtifacts (config : Config) (dressedDir : FilePath) : IO Bluepr
       -- Right column: Lean signature and proof body (separate for toggle sync)
       signatureHtml := signatureHtml
       proofBodyHtml := proofBodyHtml
-      hoverData := artifact.bind (·.hoverData) |>.orElse (fun _ => hoverData)
+      hoverData := hoverData
       declNames := node.leanDecls
       uses := (depGraph.inEdges node.id).map (·.from_.replace ":" "-")
       url := node.url.replace ":" "-"  -- Normalize URL anchor to match HTML id
@@ -450,8 +413,6 @@ def buildSiteFromArtifacts (config : Config) (dressedDir : FilePath) : IO Bluepr
   let mut finalNodes := nodes
   if nodes.isEmpty && !declArtifacts.isEmpty then
     for (key, art) in declArtifacts.toArray do
-      let (_, hoverData) ← loadCodeHtmlAndHovers dressedDir key
-
       -- Extract Lean signature and proof body HTML separately for right column
       let signatureHtml := art.leanSignatureHtml.filter (·.isEmpty == false)
       let proofBodyHtml := art.leanProofBodyHtml.filter (·.isEmpty == false)
@@ -483,7 +444,7 @@ def buildSiteFromArtifacts (config : Config) (dressedDir : FilePath) : IO Bluepr
         -- Right column: Lean signature and proof body (separate for toggle sync)
         signatureHtml := signatureHtml
         proofBodyHtml := proofBodyHtml
-        hoverData := art.hoverData.orElse (fun _ => hoverData)
+        hoverData := art.hoverData  -- Already loaded during initial traversal
         declNames := if art.name.isEmpty then #[] else #[art.name.toName]
         uses := art.uses.map (·.replace ":" "-")  -- Normalize dependency labels
         url := s!"#node-{key}"
