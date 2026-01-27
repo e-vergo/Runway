@@ -19,30 +19,6 @@ open Lean (Name Json ToJson FromJson)
 open Verso Doc
 open Runway.Graph (NodeStatus Graph Node Edge)
 
-/-! ## Priority Enum -/
-
-/-- Priority level for dashboard display -/
-inductive Priority where
-  | high
-  | medium
-  | low
-  deriving Repr, Inhabited, BEq
-
-instance : ToString Priority where
-  toString | .high => "high" | .medium => "medium" | .low => "low"
-
-instance : ToJson Priority where
-  toJson p := Json.str (toString p)
-
-instance : FromJson Priority where
-  fromJson? j := do
-    let s ← j.getStr?
-    match s with
-    | "high" => pure .high
-    | "medium" => pure .medium
-    | "low" => pure .low
-    | _ => throw "Invalid priority"
-
 /-! ## Chapter and Section Structures -/
 
 /-- Convert a title to a URL-safe slug -/
@@ -150,8 +126,8 @@ structure NodeInfo where
   keyTheorem : Bool := false
   /-- Optional message annotation -/
   message : Option String := none
-  /-- Priority level for dashboard display -/
-  priority : Option Priority := none
+  /-- Whether this is a priority item for dashboard display -/
+  priorityItem : Bool := false
   /-- Description of what's blocking this node -/
   blocked : Option String := none
   /-- Description of potential issues -/
@@ -187,7 +163,7 @@ instance : ToJson NodeInfo where
     ("displayNumber", match n.displayNumber with | some d => .str d | none => .null),
     ("keyTheorem", .bool n.keyTheorem),
     ("message", match n.message with | some m => .str m | none => .null),
-    ("priority", match n.priority with | some p => ToJson.toJson p | none => .null),
+    ("priorityItem", .bool n.priorityItem),
     ("blocked", match n.blocked with | some b => .str b | none => .null),
     ("potentialIssue", match n.potentialIssue with | some p => .str p | none => .null),
     ("technicalDebt", match n.technicalDebt with | some t => .str t | none => .null),
@@ -222,12 +198,12 @@ instance : FromJson NodeInfo where
     let displayNumber := (j.getObjValAs? String "displayNumber").toOption
     let keyTheorem := (j.getObjValAs? Bool "keyTheorem").toOption.getD false
     let message := (j.getObjValAs? String "message").toOption
-    let priority := (j.getObjValAs? Priority "priority").toOption
+    let priorityItem := (j.getObjValAs? Bool "priorityItem").toOption.getD false
     let blocked := (j.getObjValAs? String "blocked").toOption
     let potentialIssue := (j.getObjValAs? String "potentialIssue").toOption
     let technicalDebt := (j.getObjValAs? String "technicalDebt").toOption
     let misc := (j.getObjValAs? String "misc").toOption
-    return { label, title, envType, status, statementHtml, proofHtml, signatureHtml, proofBodyHtml, hoverData, declNames, uses, url, displayNumber, keyTheorem, message, priority, blocked, potentialIssue, technicalDebt, misc }
+    return { label, title, envType, status, statementHtml, proofHtml, signatureHtml, proofBodyHtml, hoverData, declNames, uses, url, displayNumber, keyTheorem, message, priorityItem, blocked, potentialIssue, technicalDebt, misc }
 
 /-- A page in the blueprint site -/
 structure SitePage where

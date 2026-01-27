@@ -345,15 +345,6 @@ private def renderLegendItem (count : Nat) (label : String) (cssClass : String) 
     .tag "span" #[] (Html.text true s!"{count} {label}")
   )
 
-/-- Render a health badge (for project health section) -/
-private def renderHealthBadge (count : Nat) (label : String) (cssClass : String) : Html :=
-  if count == 0 then Html.empty
-  else
-    spanClass s!"health-badge {cssClass}" (
-      spanClass "badge-count" (Html.text true s!"{count}") ++
-      spanClass "badge-label" (Html.text true s!" {label}")
-    )
-
 /-- Render progress statistics as stats box with pie chart + legend -/
 def renderProgress (site : BlueprintSite) : Html :=
   let counts := site.statusCounts
@@ -387,24 +378,16 @@ def renderProgress (site : BlueprintSite) : Html :=
       renderLegendItem counts.mathlibReady "mathlib ready" "mathlib-ready" ++
       renderLegendItem counts.inMathlib "in mathlib" "in-mathlib"
 
-    -- Compute health counts from site.nodes
-    let blockedCount := site.nodes.filter (·.blocked.isSome) |>.size
-    let highPriorityCount := site.nodes.filter (fun n => n.priority == some .high) |>.size
-    let issueCount := site.nodes.filter (·.potentialIssue.isSome) |>.size
-    let messageCount := site.nodes.filter (·.message.isSome) |>.size
+    -- Compute stats for the two-column layout
+    let provenCount := counts.proven + counts.fullyProven
+    let sorryCount := counts.hasSorry
+    let otherCount := counts.notReady + counts.stated + counts.ready +
+                      counts.mathlibReady + counts.inMathlib
 
-    -- Render health section if any counts > 0
-    let healthSection := if blockedCount + highPriorityCount + issueCount + messageCount == 0 then Html.empty else
-      divClass "stats-separator" Html.empty ++
-      divClass "project-health" (
-        divClass "health-title" (Html.text true "Project Health") ++
-        divClass "health-metrics" (
-          renderHealthBadge blockedCount "BLOCKED" "health-blocked" ++
-          renderHealthBadge highPriorityCount "HIGH" "health-high" ++
-          renderHealthBadge issueCount "ISSUES" "health-issues" ++
-          renderHealthBadge messageCount "NOTES" "health-notes"
-        )
-      )
+    -- Compute attention counts from site.nodes
+    let blockedCount := site.nodes.filter (·.blocked.isSome) |>.size
+    let issueCount := site.nodes.filter (·.potentialIssue.isSome) |>.size
+    let debtCount := site.nodes.filter (·.technicalDebt.isSome) |>.size
 
     divClass "stats-box" (
       -- Title
@@ -419,19 +402,46 @@ def renderProgress (site : BlueprintSite) : Html :=
       ) ++
       -- Separator
       divClass "stats-separator" Html.empty ++
-      -- Stats summary with percentages
-      let provenCount := counts.proven + counts.fullyProven
-      let provenPct := if total > 0 then (provenCount.toFloat / total.toFloat * 100.0).toUInt32 else 0
-      let sorryPct := if total > 0 then (counts.hasSorry.toFloat / total.toFloat * 100.0).toUInt32 else 0
-      let otherPct := 100 - provenPct - sorryPct
-      divClass "stats-summary" (
-        divClass "stats-total" (Html.text true s!"{total} total declarations") ++
-        divClass "stats-percentages" (
-          Html.text true s!"{provenPct}% proven · {sorryPct}% sorry · {otherPct}% other"
+      -- Stats details with two-column layout
+      divClass "stats-details" (
+        -- Total count header
+        divClass "stats-total" (Html.text true s!"{total} declarations") ++
+        -- Two-column layout
+        divClass "stats-columns" (
+          -- Left column: Completion stats
+          divClass "stats-column" (
+            divClass "stats-column-header" (Html.text true "Completion") ++
+            divClass "stats-row" (
+              spanClass "stats-value" (Html.text true s!"{provenCount}") ++
+              spanClass "stats-label" (Html.text true " proven")
+            ) ++
+            divClass "stats-row" (
+              spanClass "stats-value" (Html.text true s!"{sorryCount}") ++
+              spanClass "stats-label" (Html.text true " sorry")
+            ) ++
+            divClass "stats-row" (
+              spanClass "stats-value" (Html.text true s!"{otherCount}") ++
+              spanClass "stats-label" (Html.text true " other")
+            )
+          ) ++
+          -- Right column: Attention stats
+          divClass "stats-column" (
+            divClass "stats-column-header" (Html.text true "Attention") ++
+            divClass "stats-row" (
+              spanClass "stats-value" (Html.text true s!"{blockedCount}") ++
+              spanClass "stats-label" (Html.text true " blocked")
+            ) ++
+            divClass "stats-row" (
+              spanClass "stats-value" (Html.text true s!"{issueCount}") ++
+              spanClass "stats-label" (Html.text true " issues")
+            ) ++
+            divClass "stats-row" (
+              spanClass "stats-value" (Html.text true s!"{debtCount}") ++
+              spanClass "stats-label" (Html.text true " tech debt")
+            )
+          )
         )
-      ) ++
-      -- Project health section (only shown if there are any health metrics)
-      healthSection
+      )
     )
 
 /-- Render Key Theorems panel (top-right) with mini side-by-side previews -/
@@ -500,17 +510,17 @@ def renderMessages (site : BlueprintSite) : Html :=
 
 /-- Render Project Notes panel (bottom-right) -/
 def renderProjectNotes (site : BlueprintSite) : Html :=
+  let messageNodes := site.nodes.filter (·.message.isSome)
+  let priorityNodes := site.nodes.filter (·.priorityItem)
   let blockedNodes := site.nodes.filter (·.blocked.isSome)
-  let highPriorityNodes := site.nodes.filter (fun n => n.priority == some .high)
-  let mediumPriorityNodes := site.nodes.filter (fun n => n.priority == some .medium)
-  let lowPriorityNodes := site.nodes.filter (fun n => n.priority == some .low)
   let issueNodes := site.nodes.filter (·.potentialIssue.isSome)
   let debtNodes := site.nodes.filter (·.technicalDebt.isSome)
   let miscNodes := site.nodes.filter (·.misc.isSome)
 
-  let hasContent := !blockedNodes.isEmpty || !highPriorityNodes.isEmpty ||
-                    !mediumPriorityNodes.isEmpty || !lowPriorityNodes.isEmpty ||
-                    !issueNodes.isEmpty || !debtNodes.isEmpty || !miscNodes.isEmpty
+  let hasMessages := !messageNodes.isEmpty
+  let hasOtherNotes := !priorityNodes.isEmpty || !blockedNodes.isEmpty ||
+                       !issueNodes.isEmpty || !debtNodes.isEmpty || !miscNodes.isEmpty
+  let hasContent := hasMessages || hasOtherNotes
 
   divClass "stats-box project-notes" (
     divClass "stats-title" (Html.text true "Project Notes") ++
@@ -518,27 +528,45 @@ def renderProjectNotes (site : BlueprintSite) : Html :=
     if !hasContent then
       divClass "stats-empty" (Html.text true "No project notes")
     else
-      divClass "notes-content" (
-        renderNoteSection "High Priority" "priority-high" highPriorityNodes (fun n => (n.priority.map toString).getD "") ++
-        renderNoteSection "Medium Priority" "priority-medium" mediumPriorityNodes (fun n => (n.priority.map toString).getD "") ++
-        renderNoteSection "Low Priority" "priority-low" lowPriorityNodes (fun n => (n.priority.map toString).getD "") ++
-        renderNoteSection "Blocked" "blocked" blockedNodes (·.blocked.getD "") ++
-        renderNoteSection "Potential Issues" "issues" issueNodes (·.potentialIssue.getD "") ++
-        renderNoteSection "Technical Debt" "tech-debt" debtNodes (·.technicalDebt.getD "") ++
-        renderNoteSection "Misc" "misc" miscNodes (·.misc.getD "")
+      divClass "notes-layout" (
+        -- Left column: Messages (always show even if empty, to reserve space)
+        divClass "notes-messages" (
+          .tag "h4" #[] (Html.text true "Messages") ++
+          if messageNodes.isEmpty then
+            divClass "notes-empty" (Html.text true "No messages")
+          else
+            .tag "ul" #[("class", "notes-list")] (
+              .seq (messageNodes.map fun node =>
+                .tag "li" #[] (
+                  .tag "a" #[("href", node.url)] (Html.text true (node.title.getD node.label)) ++
+                  divClass "note-content" (Html.text true (node.message.getD ""))
+                )
+              )
+            )
+        ) ++
+        -- Right column: Other notes
+        divClass "notes-other" (
+          renderNoteSection "Priority Items" priorityNodes (fun _ => "") ++
+          renderNoteSection "Blocked" blockedNodes (·.blocked.getD "") ++
+          renderNoteSection "Potential Issues" issueNodes (·.potentialIssue.getD "") ++
+          renderNoteSection "Technical Debt" debtNodes (·.technicalDebt.getD "") ++
+          renderNoteSection "Misc" miscNodes (·.misc.getD "")
+        )
       )
   )
 where
-  renderNoteSection (title : String) (cssClass : String) (nodes : Array NodeInfo) (getText : NodeInfo → String) : Html :=
+  renderNoteSection (title : String) (nodes : Array NodeInfo) (getText : NodeInfo → String) : Html :=
     if nodes.isEmpty then Html.empty
     else
-      divClass s!"note-section {cssClass}" (
+      divClass "note-section" (
         .tag "h4" #[] (Html.text true title) ++
-        .tag "ul" #[("class", "dashboard-list")] (
+        .tag "ul" #[("class", "notes-list")] (
           .seq (nodes.map fun node =>
+            let text := getText node
             .tag "li" #[] (
               .tag "a" #[("href", node.url)] (Html.text true (node.title.getD node.label)) ++
-              .tag "span" #[("class", "note-text")] (Html.text true s!" — {getText node}")
+              (if text.isEmpty then Html.empty else
+                spanClass "note-text" (Html.text true s!" — {text}"))
             )
           )
         )

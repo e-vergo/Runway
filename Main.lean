@@ -351,14 +351,6 @@ def parseStatusCounts (json : Lean.Json) : Option StatusCounts :=
     total := getNat "total"
   }
 
-/-- Parse Priority from string -/
-def parsePriority (s : String) : Option Priority :=
-  match s.replace "\"" "" with  -- Remove quotes from JSON string
-  | "high" => some .high
-  | "medium" => some .medium
-  | "low" => some .low
-  | _ => none
-
 /-- Build a BlueprintSite from Dress artifacts -/
 def buildSiteFromArtifacts (config : Config) (dressedDir : FilePath) : IO BlueprintSite := do
   -- Load the enhanced manifest (contains stats and node metadata)
@@ -404,7 +396,7 @@ def buildSiteFromArtifacts (config : Config) (dressedDir : FilePath) : IO Bluepr
     -- Get node metadata from manifest (use original node.id for lookup)
     let keyTheorem := manifest.isKeyTheorem node.id
     let message := manifest.getMessage node.id
-    let priority := manifest.getPriority node.id |>.bind parsePriority
+    let priorityItem := manifest.getPriorityItem node.id
     let blocked := manifest.getBlocked node.id
     let potentialIssue := manifest.getPotentialIssue node.id
     let technicalDebt := manifest.getTechnicalDebt node.id
@@ -428,7 +420,7 @@ def buildSiteFromArtifacts (config : Config) (dressedDir : FilePath) : IO Bluepr
       -- Node metadata from manifest
       keyTheorem := keyTheorem
       message := message
-      priority := priority
+      priorityItem := priorityItem
       blocked := blocked
       potentialIssue := potentialIssue
       technicalDebt := technicalDebt
@@ -448,7 +440,7 @@ def buildSiteFromArtifacts (config : Config) (dressedDir : FilePath) : IO Bluepr
       -- Get node metadata from manifest
       let keyTheorem := manifest.isKeyTheorem key
       let message := manifest.getMessage key
-      let priority := manifest.getPriority key |>.bind parsePriority
+      let priorityItem := manifest.getPriorityItem key
       let blocked := manifest.getBlocked key
       let potentialIssue := manifest.getPotentialIssue key
       let technicalDebt := manifest.getTechnicalDebt key
@@ -472,7 +464,7 @@ def buildSiteFromArtifacts (config : Config) (dressedDir : FilePath) : IO Bluepr
         -- Node metadata from manifest
         keyTheorem := keyTheorem
         message := message
-        priority := priority
+        priorityItem := priorityItem
         blocked := blocked
         potentialIssue := potentialIssue
         technicalDebt := technicalDebt
