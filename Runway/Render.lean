@@ -475,11 +475,13 @@ where
 /-- Render the 2x2 dashboard grid -/
 def renderDashboard (site : BlueprintSite) : Html :=
   divClass "dashboard-grid" (
-    divClass "dashboard-row" (
-      divClass "dashboard-cell" (renderProgress site) ++
-      divClass "dashboard-cell" (renderKeyTheorems site)
+    -- Top row: Progress (fixed width) + Key Theorems (fills remaining space)
+    divClass "dashboard-row top-row" (
+      divClass "dashboard-cell progress-cell" (renderProgress site) ++
+      divClass "dashboard-cell key-theorems-cell" (renderKeyTheorems site)
     ) ++
-    divClass "dashboard-row" (
+    -- Bottom row: Messages + Project Notes (equal width, spanning full width)
+    divClass "dashboard-row bottom-row" (
       divClass "dashboard-cell" (renderMessages site) ++
       divClass "dashboard-cell" (renderProjectNotes site)
     )
