@@ -9,6 +9,7 @@ import Runway.Graph
 import Runway.Render
 import Verso.Output.Html
 import Std.Data.HashMap
+import Dress.Render
 
 /-!
 # ar5iv-Style Paper Generation
@@ -39,6 +40,13 @@ def toVerificationLevel (status : String) : VerificationLevel :=
     .inProgress
   else
     .notStarted
+
+/-- Convert VerificationLevel back to Dress.Graph.NodeStatus for rendering.
+    Note: This is a lossy conversion since VerificationLevel has fewer states. -/
+def verificationLevelToDressStatus : VerificationLevel → Dress.Graph.NodeStatus
+  | .verified => .fullyProven
+  | .inProgress => .stated
+  | .notStarted => .notReady
 
 /-- Render verification badge HTML -/
 def renderBadge (level : VerificationLevel) : Html :=
@@ -79,43 +87,25 @@ structure PaperNodeInfoExt extends PaperNodeInfo where
   hoverData : Option String := none
   deriving Inhabited
 
-/-- Render the Lean column for side-by-side display -/
+/-- Convert PaperNodeInfoExt to SbsData for consolidated rendering -/
+def PaperNodeInfoExt.toSbsData (info : PaperNodeInfoExt) (includeProof : Bool := true) : Dress.Render.SbsData := {
+  id := info.label
+  label := info.displayNumber
+  displayNumber := some info.displayNumber
+  envType := info.envType
+  status := verificationLevelToDressStatus info.status
+  statementHtml := info.statement
+  proofHtml := if includeProof then info.proof else none
+  signatureHtml := info.signatureHtml
+  proofBodyHtml := if includeProof then info.proofBodyHtml else none
+  hoverData := info.hoverData
+  declNames := #[]  -- Paper doesn't track this
+}
+
+/-- Render the Lean column for side-by-side display
+    DEPRECATED: Use Dress.Render.renderSideBySide with .paper variant instead -/
 def renderLeanColumn (info : PaperNodeInfoExt) : Html :=
-  divClass "sbs-lean-column" (
-    match info.signatureHtml, info.proofBodyHtml with
-    | some sigHtml, some proofHtml =>
-      -- The lean-code wrapper with hover data attribute
-      let hoverAttr := match info.hoverData with
-        | some hd => #[("data-lean-hovers", hd)]
-        | none => #[]
-      .tag "pre" (#[("class", "lean-code hl lean")] ++ hoverAttr) (
-        -- Signature (always visible)
-        .tag "code" #[("class", "hl lean lean-signature")] (Html.text false sigHtml) ++
-        -- Proof body (hidden by default, synced with LaTeX proof toggle)
-        .tag "code" #[("class", "hl lean lean-proof-body")] (Html.text false proofHtml)
-      )
-    | some sigHtml, none =>
-      -- Only signature, no proof body
-      let hoverAttr := match info.hoverData with
-        | some hd => #[("data-lean-hovers", hd)]
-        | none => #[]
-      .tag "pre" (#[("class", "lean-code hl lean")] ++ hoverAttr) (
-        .tag "code" #[("class", "hl lean lean-signature")] (Html.text false sigHtml)
-      )
-    | none, some proofHtml =>
-      -- Only proof body (unusual case)
-      let hoverAttr := match info.hoverData with
-        | some hd => #[("data-lean-hovers", hd)]
-        | none => #[]
-      .tag "pre" (#[("class", "lean-code hl lean")] ++ hoverAttr) (
-        .tag "code" #[("class", "hl lean lean-proof-body")] (Html.text false proofHtml)
-      )
-    | none, none =>
-      -- No Lean code available
-      .tag "pre" #[("class", "lean-code")] (
-        .tag "code" #[("class", "hl lean")] (Html.text true "-- Lean code not available")
-      )
-  )
+  Html.text false (Dress.Render.renderLeanColumn info.toSbsData)
 
 /-- Render theorem environment (statement only) -/
 def renderStatement (info : PaperNodeInfo) : Html :=
@@ -136,30 +126,10 @@ def renderStatement (info : PaperNodeInfo) : Html :=
     )
   )
 
-/-- Render statement with side-by-side Lean code -/
+/-- Render statement with side-by-side Lean code (no proof) -/
 def renderStatementSbs (info : PaperNodeInfoExt) : Html :=
-  let envTypeLower := info.envType.toLower
-  .tag "div" #[("class", s!"paper-theorem paper-{info.envType} sbs-container"),
-               ("id", info.label)] (
-    -- Left column: LaTeX statement
-    divClass "sbs-latex-column" (
-      .tag "div" #[("class", "paper-theorem-header")] (
-        .tag "span" #[("class", "paper-theorem-type")] (
-          Html.text true (capitalize info.envType ++ " " ++ info.displayNumber)
-        ) ++
-        renderBadge info.status ++
-        (match info.blueprintUrl with
-         | some url => .tag "a" #[("class", "blueprint-link"), ("href", url)]
-                         (Html.text true "[blueprint]")
-         | none => Html.empty)
-      ) ++
-      .tag "div" #[("class", s!"{envTypeLower}_thmcontent")] (
-        .tag "p" #[] (Html.text false info.statement)
-      )
-    ) ++
-    -- Right column: Lean signature
-    renderLeanColumn info
-  )
+  let sbsData := info.toSbsData (includeProof := false)
+  Html.text false (Dress.Render.renderSideBySide sbsData (.paper info.blueprintUrl))
 
 /-- Render theorem with proof -/
 def renderFull (info : PaperNodeInfo) : Html :=
@@ -175,41 +145,8 @@ def renderFull (info : PaperNodeInfo) : Html :=
 
 /-- Render theorem with proof in side-by-side layout -/
 def renderFullSbs (info : PaperNodeInfoExt) : Html :=
-  let envTypeLower := info.envType.toLower
-  .tag "div" #[("class", s!"paper-theorem paper-{info.envType} sbs-container"),
-               ("id", info.label)] (
-    -- Left column: LaTeX statement + proof
-    divClass "sbs-latex-column" (
-      .tag "div" #[("class", "paper-theorem-header")] (
-        .tag "span" #[("class", "paper-theorem-type")] (
-          Html.text true (capitalize info.envType ++ " " ++ info.displayNumber)
-        ) ++
-        renderBadge info.status ++
-        (match info.blueprintUrl with
-         | some url => .tag "a" #[("class", "blueprint-link"), ("href", url)]
-                         (Html.text true "[blueprint]")
-         | none => Html.empty)
-      ) ++
-      .tag "div" #[("class", s!"{envTypeLower}_thmcontent")] (
-        .tag "p" #[] (Html.text false info.statement)
-      ) ++
-      -- Proof (collapsible)
-      (match info.proof with
-       | some proofText =>
-         divClass "proof_wrapper proof_inline" (
-           divClass "proof_heading" (
-             spanClass "proof_caption" (Html.text true "Proof") ++
-             spanClass "expand-proof" (Html.text true "\u25B6")
-           ) ++
-           divClass "proof_content" (
-             .tag "p" #[] (Html.text false proofText)
-           )
-         )
-       | none => Html.empty)
-    ) ++
-    -- Right column: Lean code (signature + proof body)
-    renderLeanColumn info
-  )
+  let sbsData := info.toSbsData (includeProof := true)
+  Html.text false (Dress.Render.renderSideBySide sbsData (.paper info.blueprintUrl))
 
 /-- Render proof only (for deferred proofs) -/
 def renderProofOnly (info : PaperNodeInfo) : Html :=

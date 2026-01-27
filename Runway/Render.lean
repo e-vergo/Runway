@@ -12,6 +12,7 @@ import Runway.Site
 import Runway.Traverse
 import Runway.DepGraph
 import Runway.DocGen4
+import Dress.Render
 
 /-!
 # HTML Rendering for Blueprint
@@ -33,6 +34,19 @@ namespace Runway
 open Lean (Name)
 open Verso Doc Output Html
 open Runway.Graph (NodeStatus Graph Node Edge)
+
+/-! ## Status Conversion -/
+
+/-- Convert Runway.Graph.NodeStatus to Dress.Graph.NodeStatus for rendering -/
+def toDressStatus : Runway.Graph.NodeStatus → Dress.Graph.NodeStatus
+  | .notReady => .notReady
+  | .stated => .stated
+  | .ready => .ready
+  | .sorry => .sorry
+  | .proven => .proven
+  | .fullyProven => .fullyProven
+  | .mathlibReady => .mathlibReady
+  | .inMathlib => .inMathlib
 
 /-! ## Render Monad -/
 
@@ -192,100 +206,26 @@ def renderDeclLinks (names : Array Name) (docgen4Url : Option String) : RenderM 
 
 /-- Render a single blueprint node (plasTeX side-by-side layout) -/
 def renderNode (node : NodeInfo) : RenderM Html := do
-  let _config ← Render.getConfig
   let _ ← Render.registerHtmlId node.label
 
-  -- Status indicator character
-  let statusChar := match node.status with
-    | .notReady => "✗"
-    | .stated => "○"
-    | .ready => "◐"
-    | .sorry => "!"
-    | .proven => "✓"
-    | .fullyProven => "✓"
-    | .mathlibReady => "✓"
-    | .inMathlib => "✓"
+  -- Convert NodeInfo to SbsData for consolidated rendering
+  let sbsData : Dress.Render.SbsData := {
+    id := node.label
+    label := node.displayNumber.getD (node.title.getD node.label)
+    displayNumber := node.displayNumber
+    envType := node.envType.toLower
+    status := toDressStatus node.status
+    statementHtml := node.statementHtml
+    proofHtml := node.proofHtml
+    signatureHtml := node.signatureHtml
+    proofBodyHtml := node.proofBodyHtml
+    hoverData := node.hoverData
+    declNames := node.declNames
+  }
 
-  -- Determine what to display as the label: displayNumber if available, otherwise title or label
-  let displayLabel := match node.displayNumber with
-    | some num => num
-    | none => node.title.getD node.label
-
-  -- Left column: LaTeX statement and proof
-  -- Use type-specific CSS classes: definition_thmheading, theorem_thmheading, lemma_thmheading, etc.
-  let envTypeLower := node.envType.toLower
-  let latexColumn := divClass "sbs-latex-column" (
-    -- Theorem heading with type-specific class
-    divClass s!"{envTypeLower}_thmheading" (
-      spanClass s!"{envTypeLower}_thmcaption" (Html.text true node.envType.capitalize) ++
-      Html.text true " " ++
-      spanClass s!"{envTypeLower}_thmlabel" (Html.text true displayLabel) ++
-      divClass "thm_header_extras" (Html.text true statusChar)
-    ) ++
-    -- Statement content with type-specific class
-    divClass s!"{envTypeLower}_thmcontent" (
-      .tag "p" #[] (Html.text false node.statementHtml)
-    ) ++
-    -- Proof (collapsible)
-    (match node.proofHtml with
-    | some proofContent =>
-      divClass "proof_wrapper proof_inline" (
-        divClass "proof_heading" (
-          spanClass "proof_caption" (Html.text true "Proof") ++
-          spanClass "expand-proof" (Html.text true "▶")
-        ) ++
-        divClass "proof_content" (
-          .tag "p" #[] (Html.text false proofContent)
-        )
-      )
-    | none => Html.empty)
-  )
-
-  -- Right column: Lean code with syntax highlighting (signature + proof body separate)
-  let leanColumn := divClass "sbs-lean-column" (
-    match node.signatureHtml, node.proofBodyHtml with
-    | some sigHtml, some proofHtml =>
-      -- The lean-code wrapper with hover data attribute
-      let hoverAttr := match node.hoverData with
-        | some hd => #[("data-lean-hovers", hd)]
-        | none => #[]
-      .tag "pre" (#[("class", "lean-code hl lean")] ++ hoverAttr) (
-        -- Signature (always visible)
-        .tag "code" #[("class", "hl lean lean-signature")] (Html.text false sigHtml) ++
-        -- Proof body (hidden by default, synced with LaTeX proof toggle)
-        .tag "code" #[("class", "hl lean lean-proof-body")] (Html.text false proofHtml)
-      )
-    | some sigHtml, none =>
-      -- Only signature, no proof body
-      let hoverAttr := match node.hoverData with
-        | some hd => #[("data-lean-hovers", hd)]
-        | none => #[]
-      .tag "pre" (#[("class", "lean-code hl lean")] ++ hoverAttr) (
-        .tag "code" #[("class", "hl lean lean-signature")] (Html.text false sigHtml)
-      )
-    | none, some proofHtml =>
-      -- Only proof body (unusual case)
-      let hoverAttr := match node.hoverData with
-        | some hd => #[("data-lean-hovers", hd)]
-        | none => #[]
-      .tag "pre" (#[("class", "lean-code hl lean")] ++ hoverAttr) (
-        .tag "code" #[("class", "hl lean lean-proof-body")] (Html.text false proofHtml)
-      )
-    | none, none =>
-      -- Fallback: show declaration names
-      .tag "pre" #[("class", "lean-code")] (
-        .tag "code" #[("class", "hl lean")] (
-          Html.text true (String.intercalate "\n" (node.declNames.map toString).toList)
-        )
-      )
-  )
-
-  -- Main container with plasTeX-compatible classes
-  let envClass := s!"theorem-style-{envTypeLower}"
-  return .tag "div" #[
-    ("id", node.label),
-    ("class", s!"{envTypeLower}_thmwrapper sbs-container {envClass}")
-  ] (latexColumn ++ leanColumn)
+  -- Render using the consolidated function
+  let html := Dress.Render.renderSideBySide sbsData .blueprint
+  return Html.text false html
 
 /-! ## Modal Rendering for Dependency Graph -/
 
