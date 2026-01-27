@@ -493,6 +493,15 @@ def runBuild (cliConfig : CLIConfig) : IO UInt32 := do
   else
     throw <| IO.userError s!"ERROR: Required asset file not found: {srcVerso}"
 
+  -- Copy paper.css (optional - for paper page)
+  let srcPaperCss := config.assetsDir / "paper.css"
+  let dstPaperCss := assetsOutputDir / "paper.css"
+  if ← srcPaperCss.pathExists then
+    let paperCssContent ← IO.FS.readFile srcPaperCss
+    IO.FS.writeFile dstPaperCss paperCssContent
+    IO.println s!"  - Copied {srcPaperCss} to {dstPaperCss}"
+  -- paper.css is optional, so no error if not found
+
   IO.println s!"Site generated at {outputDir}"
   IO.println s!"  - {site.nodes.size} nodes"
   IO.println s!"  - {site.depGraph.edges.size} dependency edges"

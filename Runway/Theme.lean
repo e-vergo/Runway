@@ -240,6 +240,13 @@ def primaryTemplateWithSidebar (chapters : Array ChapterInfo) (currentSlug : Opt
     | some slug => renderPrevNextNav chapters slug toRoot
     | none => Html.empty
 
+  -- Check if this is the paper page to load additional CSS
+  let isPaperPage := currentSlug == some "paper"
+  let paperCssLink := if isPaperPage then
+    .tag "link" #[("rel", "stylesheet"), ("href", s!"{toRoot}assets/paper.css")] Html.empty
+  else
+    Html.empty
+
   return .tag "html" #[("lang", "en")] (
     .tag "head" #[] (
       .tag "meta" #[("charset", "UTF-8")] Html.empty ++
@@ -247,6 +254,7 @@ def primaryTemplateWithSidebar (chapters : Array ChapterInfo) (currentSlug : Opt
       .tag "title" #[] (Html.text true config.title) ++
       -- Local CSS
       .tag "link" #[("rel", "stylesheet"), ("href", s!"{toRoot}assets/blueprint.css")] Html.empty ++
+      paperCssLink ++
       .tag "link" #[("rel", "icon"), ("href", "data:,")] Html.empty ++
       -- MathJax config and script
       mathjaxConfig ++
@@ -452,15 +460,9 @@ def renderChapterContent (chapter : ChapterInfo) (allNodes : Array NodeInfo) : R
 def renderMultiPageIndex (site : BlueprintSite) : RenderM Html := do
   let config ← Render.getConfig
 
-  -- Title section
+  -- Title section (external links are in the sidebar, not here)
   let titleSection := divClass "index-header" (
-    .tag "h1" #[] (Html.text true config.title) ++
-    (match config.githubUrl with
-     | some url => htmlLink url (Html.text true "GitHub") (some "github-link")
-     | none => Html.empty) ++
-    (match config.docgen4Url with
-     | some url => htmlLink url (Html.text true "Documentation") (some "docs-link")
-     | none => Html.empty)
+    .tag "h1" #[] (Html.text true config.title)
   )
 
   -- Progress section
