@@ -410,11 +410,12 @@ def buildSiteFromArtifacts (config : Config) (dressedDir : FilePath) : IO Bluepr
       if node.label.contains '.' then
         -- Full qualified name like "SBSTest.Chapter2.square_nonneg"
         -- Derive short name from first leanDecl (last component of the name)
-        match node.leanDecls.get? 0 with
-        | some declName =>
+        if h : 0 < node.leanDecls.size then
+          let declName : Lean.Name := node.leanDecls[0]
           let shortName := declName.components.getLast?.map (·.toString)
           shortName
-        | none => some normalizedId  -- Fall back to LaTeX label
+        else
+          some normalizedId  -- Fall back to LaTeX label
       else
         -- Custom displayName was set
         some node.label
