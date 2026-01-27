@@ -69,6 +69,54 @@ private def capitalize (s : String) : String :=
   | [] => s
   | c :: cs => String.ofList (c.toUpper :: cs)
 
+/-- Extended paper node info with Lean code fields -/
+structure PaperNodeInfoExt extends PaperNodeInfo where
+  /-- Pre-rendered Lean signature HTML (syntax-highlighted) -/
+  signatureHtml : Option String := none
+  /-- Pre-rendered Lean proof body HTML (syntax-highlighted) -/
+  proofBodyHtml : Option String := none
+  /-- Hover data JSON for Tippy.js tooltips -/
+  hoverData : Option String := none
+  deriving Inhabited
+
+/-- Render the Lean column for side-by-side display -/
+def renderLeanColumn (info : PaperNodeInfoExt) : Html :=
+  divClass "sbs-lean-column" (
+    match info.signatureHtml, info.proofBodyHtml with
+    | some sigHtml, some proofHtml =>
+      -- The lean-code wrapper with hover data attribute
+      let hoverAttr := match info.hoverData with
+        | some hd => #[("data-lean-hovers", hd)]
+        | none => #[]
+      .tag "pre" (#[("class", "lean-code hl lean")] ++ hoverAttr) (
+        -- Signature (always visible)
+        .tag "code" #[("class", "hl lean lean-signature")] (Html.text false sigHtml) ++
+        -- Proof body (hidden by default, synced with LaTeX proof toggle)
+        .tag "code" #[("class", "hl lean lean-proof-body")] (Html.text false proofHtml)
+      )
+    | some sigHtml, none =>
+      -- Only signature, no proof body
+      let hoverAttr := match info.hoverData with
+        | some hd => #[("data-lean-hovers", hd)]
+        | none => #[]
+      .tag "pre" (#[("class", "lean-code hl lean")] ++ hoverAttr) (
+        .tag "code" #[("class", "hl lean lean-signature")] (Html.text false sigHtml)
+      )
+    | none, some proofHtml =>
+      -- Only proof body (unusual case)
+      let hoverAttr := match info.hoverData with
+        | some hd => #[("data-lean-hovers", hd)]
+        | none => #[]
+      .tag "pre" (#[("class", "lean-code hl lean")] ++ hoverAttr) (
+        .tag "code" #[("class", "hl lean lean-proof-body")] (Html.text false proofHtml)
+      )
+    | none, none =>
+      -- No Lean code available
+      .tag "pre" #[("class", "lean-code")] (
+        .tag "code" #[("class", "hl lean")] (Html.text true "-- Lean code not available")
+      )
+  )
+
 /-- Render theorem environment (statement only) -/
 def renderStatement (info : PaperNodeInfo) : Html :=
   .tag "div" #[("class", s!"paper-theorem paper-{info.envType}"),
@@ -88,6 +136,31 @@ def renderStatement (info : PaperNodeInfo) : Html :=
     )
   )
 
+/-- Render statement with side-by-side Lean code -/
+def renderStatementSbs (info : PaperNodeInfoExt) : Html :=
+  let envTypeLower := info.envType.toLower
+  .tag "div" #[("class", s!"paper-theorem paper-{info.envType} sbs-container"),
+               ("id", info.label)] (
+    -- Left column: LaTeX statement
+    divClass "sbs-latex-column" (
+      .tag "div" #[("class", "paper-theorem-header")] (
+        .tag "span" #[("class", "paper-theorem-type")] (
+          Html.text true (capitalize info.envType ++ " " ++ info.displayNumber)
+        ) ++
+        renderBadge info.status ++
+        (match info.blueprintUrl with
+         | some url => .tag "a" #[("class", "blueprint-link"), ("href", url)]
+                         (Html.text true "[blueprint]")
+         | none => Html.empty)
+      ) ++
+      .tag "div" #[("class", s!"{envTypeLower}_thmcontent")] (
+        .tag "p" #[] (Html.text false info.statement)
+      )
+    ) ++
+    -- Right column: Lean signature
+    renderLeanColumn info
+  )
+
 /-- Render theorem with proof -/
 def renderFull (info : PaperNodeInfo) : Html :=
   renderStatement info ++
@@ -99,6 +172,44 @@ def renderFull (info : PaperNodeInfo) : Html :=
        .tag "span" #[("class", "paper-qed")] (Html.text true " \u25A1")
      )
    | none => Html.empty)
+
+/-- Render theorem with proof in side-by-side layout -/
+def renderFullSbs (info : PaperNodeInfoExt) : Html :=
+  let envTypeLower := info.envType.toLower
+  .tag "div" #[("class", s!"paper-theorem paper-{info.envType} sbs-container"),
+               ("id", info.label)] (
+    -- Left column: LaTeX statement + proof
+    divClass "sbs-latex-column" (
+      .tag "div" #[("class", "paper-theorem-header")] (
+        .tag "span" #[("class", "paper-theorem-type")] (
+          Html.text true (capitalize info.envType ++ " " ++ info.displayNumber)
+        ) ++
+        renderBadge info.status ++
+        (match info.blueprintUrl with
+         | some url => .tag "a" #[("class", "blueprint-link"), ("href", url)]
+                         (Html.text true "[blueprint]")
+         | none => Html.empty)
+      ) ++
+      .tag "div" #[("class", s!"{envTypeLower}_thmcontent")] (
+        .tag "p" #[] (Html.text false info.statement)
+      ) ++
+      -- Proof (collapsible)
+      (match info.proof with
+       | some proofText =>
+         divClass "proof_wrapper proof_inline" (
+           divClass "proof_heading" (
+             spanClass "proof_caption" (Html.text true "Proof") ++
+             spanClass "expand-proof" (Html.text true "\u25B6")
+           ) ++
+           divClass "proof_content" (
+             .tag "p" #[] (Html.text false proofText)
+           )
+         )
+       | none => Html.empty)
+    ) ++
+    -- Right column: Lean code (signature + proof body)
+    renderLeanColumn info
+  )
 
 /-- Render proof only (for deferred proofs) -/
 def renderProofOnly (info : PaperNodeInfo) : Html :=
@@ -263,6 +374,20 @@ def toPaperNodeInfo (node : NodeInfo) (baseUrl : String := "") : PaperNodeInfo :
     blueprintUrl := some (baseUrl ++ "index.html#node-" ++ node.label)
   }
 
+/-- Build a PaperNodeInfoExt from a NodeInfo (includes Lean code fields) -/
+def toPaperNodeInfoExt (node : NodeInfo) (baseUrl : String := "") : PaperNodeInfoExt :=
+  { label := node.label
+    envType := node.envType
+    displayNumber := node.displayNumber.getD node.label
+    statement := latexTextToHtml node.statementHtml
+    proof := node.proofHtml.map latexTextToHtml
+    status := nodeStatusToVerificationLevel node.status
+    blueprintUrl := some (baseUrl ++ "index.html#" ++ node.label)
+    signatureHtml := node.signatureHtml
+    proofBodyHtml := node.proofBodyHtml
+    hoverData := node.hoverData
+  }
+
 /-- Render an inline element to HTML string -/
 private partial def inlineToHtml : Latex.Inline -> String
   | .text s => escapeHtml s
@@ -332,28 +457,29 @@ private partial def blockToHtmlString (artifacts : HashMap String NodeInfo) (bas
     s!"<ol>\n{itemsHtml}</ol>\n"
   | .inputLeanModule _ => ""  -- Not used in paper mode
   | .inputLeanNode label =>
-    -- Resolve the node and render full (statement + proof)
+    -- Resolve the node and render full side-by-side (statement + proof + Lean code)
     let normalizedLabel := label.replace ":" "-"
     match artifacts.get? normalizedLabel with
     | some node =>
-      let paperNode := toPaperNodeInfo node baseUrl
-      (renderFull paperNode).asString
+      let paperNode := toPaperNodeInfoExt node baseUrl
+      (renderFullSbs paperNode).asString
     | none => s!"<div class=\"paper-error\">Node not found: {label}</div>\n"
   | .paperStatement label =>
     let normalizedLabel := label.replace ":" "-"
     match artifacts.get? normalizedLabel with
     | some node =>
-      let paperNode := toPaperNodeInfo node baseUrl
-      (renderStatement paperNode).asString
+      let paperNode := toPaperNodeInfoExt node baseUrl
+      (renderStatementSbs paperNode).asString
     | none => s!"<div class=\"paper-error\">Node not found: {label}</div>\n"
   | .paperFull label =>
     let normalizedLabel := label.replace ":" "-"
     match artifacts.get? normalizedLabel with
     | some node =>
-      let paperNode := toPaperNodeInfo node baseUrl
-      (renderFull paperNode).asString
+      let paperNode := toPaperNodeInfoExt node baseUrl
+      (renderFullSbs paperNode).asString
     | none => s!"<div class=\"paper-error\">Node not found: {label}</div>\n"
   | .paperProof label =>
+    -- For proof-only, use the non-SBS version (just LaTeX proof)
     let normalizedLabel := label.replace ":" "-"
     match artifacts.get? normalizedLabel with
     | some node =>
