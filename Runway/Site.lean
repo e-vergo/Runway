@@ -19,6 +19,30 @@ open Lean (Name Json ToJson FromJson)
 open Verso Doc
 open Runway.Graph (NodeStatus Graph Node Edge)
 
+/-! ## Priority Enum -/
+
+/-- Priority level for dashboard display -/
+inductive Priority where
+  | high
+  | medium
+  | low
+  deriving Repr, Inhabited, BEq
+
+instance : ToString Priority where
+  toString | .high => "high" | .medium => "medium" | .low => "low"
+
+instance : ToJson Priority where
+  toJson p := Json.str (toString p)
+
+instance : FromJson Priority where
+  fromJson? j := do
+    let s ← j.getStr?
+    match s with
+    | "high" => pure .high
+    | "medium" => pure .medium
+    | "low" => pure .low
+    | _ => throw "Invalid priority"
+
 /-! ## Chapter and Section Structures -/
 
 /-- Convert a title to a URL-safe slug -/
@@ -122,6 +146,20 @@ structure NodeInfo where
   url : String
   /-- Display number in chapter.section.item format (e.g., "4.1.1") -/
   displayNumber : Option String := none
+  /-- Whether this is a key theorem for dashboard highlighting -/
+  keyTheorem : Bool := false
+  /-- Optional message annotation -/
+  message : Option String := none
+  /-- Priority level for dashboard display -/
+  priority : Option Priority := none
+  /-- Description of what's blocking this node -/
+  blocked : Option String := none
+  /-- Description of potential issues -/
+  potentialIssue : Option String := none
+  /-- Description of technical debt -/
+  technicalDebt : Option String := none
+  /-- Miscellaneous notes -/
+  misc : Option String := none
   deriving Inhabited, Repr
 
 instance : ToJson NodeInfo where
@@ -146,7 +184,14 @@ instance : ToJson NodeInfo where
     ("declNames", .arr (n.declNames.map fun name => .str name.toString)),
     ("uses", .arr (n.uses.map .str)),
     ("url", .str n.url),
-    ("displayNumber", match n.displayNumber with | some d => .str d | none => .null)
+    ("displayNumber", match n.displayNumber with | some d => .str d | none => .null),
+    ("keyTheorem", .bool n.keyTheorem),
+    ("message", match n.message with | some m => .str m | none => .null),
+    ("priority", match n.priority with | some p => ToJson.toJson p | none => .null),
+    ("blocked", match n.blocked with | some b => .str b | none => .null),
+    ("potentialIssue", match n.potentialIssue with | some p => .str p | none => .null),
+    ("technicalDebt", match n.technicalDebt with | some t => .str t | none => .null),
+    ("misc", match n.misc with | some m => .str m | none => .null)
   ]
 
 instance : FromJson NodeInfo where
@@ -175,7 +220,14 @@ instance : FromJson NodeInfo where
     let uses ← j.getObjValAs? (Array String) "uses" <|> pure #[]
     let url ← j.getObjValAs? String "url" <|> pure ""
     let displayNumber := (j.getObjValAs? String "displayNumber").toOption
-    return { label, title, envType, status, statementHtml, proofHtml, signatureHtml, proofBodyHtml, hoverData, declNames, uses, url, displayNumber }
+    let keyTheorem := (j.getObjValAs? Bool "keyTheorem").toOption.getD false
+    let message := (j.getObjValAs? String "message").toOption
+    let priority := (j.getObjValAs? Priority "priority").toOption
+    let blocked := (j.getObjValAs? String "blocked").toOption
+    let potentialIssue := (j.getObjValAs? String "potentialIssue").toOption
+    let technicalDebt := (j.getObjValAs? String "technicalDebt").toOption
+    let misc := (j.getObjValAs? String "misc").toOption
+    return { label, title, envType, status, statementHtml, proofHtml, signatureHtml, proofBodyHtml, hoverData, declNames, uses, url, displayNumber, keyTheorem, message, priority, blocked, potentialIssue, technicalDebt, misc }
 
 /-- A page in the blueprint site -/
 structure SitePage where
@@ -186,6 +238,49 @@ structure SitePage where
   /-- The Verso document content -/
   content : Part Blueprint
   deriving Inhabited
+
+/-! ## Status Counts -/
+
+/-- Count of nodes by status -/
+structure StatusCounts where
+  notReady : Nat := 0
+  stated : Nat := 0
+  ready : Nat := 0
+  hasSorry : Nat := 0  -- Named hasSorry because `sorry` is a keyword
+  proven : Nat := 0
+  fullyProven : Nat := 0
+  mathlibReady : Nat := 0
+  inMathlib : Nat := 0
+  total : Nat := 0
+  deriving Inhabited, Repr
+
+instance : ToJson StatusCounts where
+  toJson sc := .mkObj [
+    ("notReady", .num sc.notReady),
+    ("stated", .num sc.stated),
+    ("ready", .num sc.ready),
+    ("hasSorry", .num sc.hasSorry),
+    ("proven", .num sc.proven),
+    ("fullyProven", .num sc.fullyProven),
+    ("mathlibReady", .num sc.mathlibReady),
+    ("inMathlib", .num sc.inMathlib),
+    ("total", .num sc.total)
+  ]
+
+instance : FromJson StatusCounts where
+  fromJson? j := do
+    let notReady ← j.getObjValAs? Nat "notReady" <|> pure 0
+    let stated ← j.getObjValAs? Nat "stated" <|> pure 0
+    let ready ← j.getObjValAs? Nat "ready" <|> pure 0
+    let hasSorry ← j.getObjValAs? Nat "hasSorry" <|> pure 0
+    let proven ← j.getObjValAs? Nat "proven" <|> pure 0
+    let fullyProven ← j.getObjValAs? Nat "fullyProven" <|> pure 0
+    let mathlibReady ← j.getObjValAs? Nat "mathlibReady" <|> pure 0
+    let inMathlib ← j.getObjValAs? Nat "inMathlib" <|> pure 0
+    let total ← j.getObjValAs? Nat "total" <|> pure 0
+    return { notReady, stated, ready, hasSorry, proven, fullyProven, mathlibReady, inMathlib, total }
+
+/-! ## Blueprint Site -/
 
 /-- The complete Blueprint site -/
 structure BlueprintSite where
@@ -203,6 +298,8 @@ structure BlueprintSite where
   depGraphJson : Option String := none
   /-- Chapters extracted from blueprint.tex (for multi-page navigation) -/
   chapters : Array ChapterInfo := #[]
+  /-- Precomputed status counts from manifest -/
+  precomputedStats : Option StatusCounts := none
   deriving Inhabited
 
 namespace BlueprintSite
@@ -219,21 +316,9 @@ def nodesByStatus (site : BlueprintSite) (status : NodeStatus) : Array NodeInfo 
 def nodesByEnvType (site : BlueprintSite) (envType : String) : Array NodeInfo :=
   site.nodes.filter (·.envType == envType)
 
-/-- Count of nodes by status -/
-structure StatusCounts where
-  notReady : Nat
-  stated : Nat
-  ready : Nat
-  hasSorry : Nat  -- Named hasSorry because `sorry` is a keyword
-  proven : Nat
-  fullyProven : Nat
-  mathlibReady : Nat
-  inMathlib : Nat
-  deriving Inhabited, Repr
-
-/-- Get counts of nodes by status -/
-def statusCounts (site : BlueprintSite) : StatusCounts := Id.run do
-  let mut counts : StatusCounts := { notReady := 0, stated := 0, ready := 0, hasSorry := 0, proven := 0, fullyProven := 0, mathlibReady := 0, inMathlib := 0 }
+/-- Compute counts of nodes by status from nodes array -/
+def computeStatusCounts (site : BlueprintSite) : StatusCounts := Id.run do
+  let mut counts : StatusCounts := {}
   for node in site.nodes do
     match node.status with
     | .notReady => counts := { counts with notReady := counts.notReady + 1 }
@@ -244,7 +329,15 @@ def statusCounts (site : BlueprintSite) : StatusCounts := Id.run do
     | .fullyProven => counts := { counts with fullyProven := counts.fullyProven + 1 }
     | .mathlibReady => counts := { counts with mathlibReady := counts.mathlibReady + 1 }
     | .inMathlib => counts := { counts with inMathlib := counts.inMathlib + 1 }
-  return counts
+  return { counts with total := site.nodes.size }
+
+/-- Get counts of nodes by status (uses precomputed if available, otherwise computes) -/
+def statusCounts (site : BlueprintSite) : StatusCounts :=
+  site.precomputedStats.getD site.computeStatusCounts
+
+/-- Alias for statusCounts that explicitly prefers precomputed stats -/
+def getStatusCounts (site : BlueprintSite) : StatusCounts :=
+  site.statusCounts
 
 /-- Total number of nodes -/
 def totalNodes (site : BlueprintSite) : Nat :=
@@ -276,6 +369,8 @@ structure SiteBuilder where
   depGraphJson : Option String := none
   /-- Chapters extracted from blueprint.tex -/
   chapters : Array ChapterInfo := #[]
+  /-- Precomputed status counts from manifest -/
+  precomputedStats : Option StatusCounts := none
   deriving Inhabited
 
 namespace SiteBuilder
@@ -316,6 +411,10 @@ def setChapters (builder : SiteBuilder) (chapters : Array ChapterInfo) : SiteBui
 def addChapter (builder : SiteBuilder) (chapter : ChapterInfo) : SiteBuilder :=
   { builder with chapters := builder.chapters.push chapter }
 
+/-- Set precomputed status counts -/
+def setPrecomputedStats (builder : SiteBuilder) (stats : Option StatusCounts) : SiteBuilder :=
+  { builder with precomputedStats := stats }
+
 /-- Build the final site -/
 def build (builder : SiteBuilder) : BlueprintSite :=
   { config := builder.config
@@ -324,7 +423,8 @@ def build (builder : SiteBuilder) : BlueprintSite :=
     pages := builder.pages
     depGraphSvg := builder.depGraphSvg
     depGraphJson := builder.depGraphJson
-    chapters := builder.chapters }
+    chapters := builder.chapters
+    precomputedStats := builder.precomputedStats }
 
 end SiteBuilder
 

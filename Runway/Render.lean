@@ -393,6 +393,98 @@ def renderProgress (site : BlueprintSite) : Html :=
       )
     )
 
+/-- Render Key Theorems panel (top-right) -/
+def renderKeyTheorems (site : BlueprintSite) : Html :=
+  let keyNodes := site.nodes.filter (·.keyTheorem)
+  divClass "stats-box key-theorems" (
+    divClass "stats-title" (Html.text true "Key Theorems") ++
+    divClass "stats-separator" Html.empty ++
+    if keyNodes.isEmpty then
+      divClass "stats-empty" (Html.text true "No key theorems marked")
+    else
+      .tag "ul" #[("class", "dashboard-list")] (
+        .seq (keyNodes.map fun node =>
+          .tag "li" #[] (
+            .tag "a" #[("href", node.url)] (Html.text true (node.title.getD node.label))
+          )
+        )
+      )
+  )
+
+/-- Render Messages panel (bottom-left) -/
+def renderMessages (site : BlueprintSite) : Html :=
+  let nodesWithMessages := site.nodes.filter (·.message.isSome)
+  divClass "stats-box messages" (
+    divClass "stats-title" (Html.text true "Messages") ++
+    divClass "stats-separator" Html.empty ++
+    if nodesWithMessages.isEmpty then
+      divClass "stats-empty" (Html.text true "No messages")
+    else
+      .tag "ul" #[("class", "dashboard-list")] (
+        .seq (nodesWithMessages.map fun node =>
+          let msg := node.message.getD ""
+          .tag "li" #[] (
+            .tag "a" #[("href", node.url)] (Html.text true (node.title.getD node.label)) ++
+            .tag "span" #[("class", "message-text")] (Html.text true s!" — {msg}")
+          )
+        )
+      )
+  )
+
+/-- Render Project Notes panel (bottom-right) -/
+def renderProjectNotes (site : BlueprintSite) : Html :=
+  let blockedNodes := site.nodes.filter (·.blocked.isSome)
+  let priorityNodes := site.nodes.filter (·.priority.isSome)
+  let issueNodes := site.nodes.filter (·.potentialIssue.isSome)
+  let debtNodes := site.nodes.filter (·.technicalDebt.isSome)
+  let miscNodes := site.nodes.filter (·.misc.isSome)
+
+  let hasContent := !blockedNodes.isEmpty || !priorityNodes.isEmpty ||
+                    !issueNodes.isEmpty || !debtNodes.isEmpty || !miscNodes.isEmpty
+
+  divClass "stats-box project-notes" (
+    divClass "stats-title" (Html.text true "Project Notes") ++
+    divClass "stats-separator" Html.empty ++
+    if !hasContent then
+      divClass "stats-empty" (Html.text true "No project notes")
+    else
+      divClass "notes-content" (
+        renderNoteSection "Priority" priorityNodes (fun n => (n.priority.map toString).getD "") ++
+        renderNoteSection "Blocked" blockedNodes (·.blocked.getD "") ++
+        renderNoteSection "Potential Issues" issueNodes (·.potentialIssue.getD "") ++
+        renderNoteSection "Technical Debt" debtNodes (·.technicalDebt.getD "") ++
+        renderNoteSection "Misc" miscNodes (·.misc.getD "")
+      )
+  )
+where
+  renderNoteSection (title : String) (nodes : Array NodeInfo) (getText : NodeInfo → String) : Html :=
+    if nodes.isEmpty then Html.empty
+    else
+      divClass "note-section" (
+        .tag "h4" #[] (Html.text true title) ++
+        .tag "ul" #[("class", "dashboard-list")] (
+          .seq (nodes.map fun node =>
+            .tag "li" #[] (
+              .tag "a" #[("href", node.url)] (Html.text true (node.title.getD node.label)) ++
+              .tag "span" #[("class", "note-text")] (Html.text true s!" — {getText node}")
+            )
+          )
+        )
+      )
+
+/-- Render the 2x2 dashboard grid -/
+def renderDashboard (site : BlueprintSite) : Html :=
+  divClass "dashboard-grid" (
+    divClass "dashboard-row" (
+      divClass "dashboard-cell" (renderProgress site) ++
+      divClass "dashboard-cell" (renderKeyTheorems site)
+    ) ++
+    divClass "dashboard-row" (
+      divClass "dashboard-cell" (renderMessages site) ++
+      divClass "dashboard-cell" (renderProjectNotes site)
+    )
+  )
+
 /-! ## Index Page Rendering -/
 
 /-- Render the main index page -/
@@ -410,8 +502,8 @@ def renderIndex (site : BlueprintSite) : RenderM Html := do
      | none => Html.empty)
   )
 
-  -- Progress section
-  let progress := renderProgress site
+  -- Dashboard section (2x2 grid with progress, key theorems, messages, notes)
+  let dashboard := renderDashboard site
 
   -- Dependency graph section with embedded SVG (if available)
   let graphSection := DepGraph.graphSection site.depGraphSvg site.depGraphJson
@@ -441,7 +533,7 @@ def renderIndex (site : BlueprintSite) : RenderM Html := do
 
   return divClass "index-page" (
     titleSection ++
-    progress ++
+    dashboard ++
     graphSection ++
     nodeList
   )

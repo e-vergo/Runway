@@ -153,4 +153,144 @@ def extractArtifacts (json : Lean.Json) : Array DeclArtifact := Id.run do
   | _ => pure ()
   return artifacts
 
+/-- Enhanced manifest data with stats and dashboard metadata -/
+structure EnhancedManifest where
+  /-- Status counts from the manifest -/
+  stats : Option Lean.Json := none
+  /-- Key theorem IDs -/
+  keyTheorems : Array String := #[]
+  /-- Messages for nodes -/
+  messages : Array (String × String) := #[]  -- (id, message)
+  /-- Priority items -/
+  priorityItems : Array (String × String) := #[]  -- (id, priority)
+  /-- Blocked items with reasons -/
+  blockedItems : Array (String × String) := #[]  -- (id, reason)
+  /-- Potential issues -/
+  potentialIssues : Array (String × String) := #[]  -- (id, issue)
+  /-- Technical debt notes -/
+  technicalDebt : Array (String × String) := #[]  -- (id, debt)
+  /-- Misc notes -/
+  miscItems : Array (String × String) := #[]  -- (id, note)
+  /-- Node id to url mapping -/
+  nodeUrls : Std.HashMap String String := {}
+  deriving Inhabited
+
+/-- Load and parse the enhanced manifest.json -/
+def loadEnhancedManifest (dressedDir : System.FilePath) : IO EnhancedManifest := do
+  let manifestPath := dressedDir / "manifest.json"
+  if !(← manifestPath.pathExists) then
+    return {}
+
+  let content ← IO.FS.readFile manifestPath
+  match Lean.Json.parse content with
+  | .error _ => return {}
+  | .ok json =>
+    let mut manifest : EnhancedManifest := {}
+
+    -- Extract stats (keep as Json for flexible parsing)
+    manifest := { manifest with stats := json.getObjVal? "stats" |>.toOption }
+
+    -- Extract key theorems
+    if let .ok arr := json.getObjValAs? (Array String) "keyTheorems" then
+      manifest := { manifest with keyTheorems := arr }
+
+    -- Extract messages
+    if let .ok messagesJson := json.getObjVal? "messages" then
+      if let .arr msgs := messagesJson then
+        let mut messages : Array (String × String) := #[]
+        for msg in msgs do
+          if let (.ok id, .ok message) := (msg.getObjValAs? String "id", msg.getObjValAs? String "message") then
+            messages := messages.push (id, message)
+        manifest := { manifest with messages := messages }
+
+    -- Extract project notes
+    if let .ok notes := json.getObjVal? "projectNotes" then
+      -- Priority items
+      if let .ok arr := notes.getObjVal? "priority" then
+        if let .arr items := arr then
+          let mut priorityItems : Array (String × String) := #[]
+          for item in items do
+            if let (.ok id, .ok priority) := (item.getObjValAs? String "id", item.getObjVal? "priority") then
+              priorityItems := priorityItems.push (id, priority.compress)
+          manifest := { manifest with priorityItems := priorityItems }
+
+      -- Blocked items
+      if let .ok arr := notes.getObjVal? "blocked" then
+        if let .arr items := arr then
+          let mut blockedItems : Array (String × String) := #[]
+          for item in items do
+            if let (.ok id, .ok reason) := (item.getObjValAs? String "id", item.getObjValAs? String "reason") then
+              blockedItems := blockedItems.push (id, reason)
+          manifest := { manifest with blockedItems := blockedItems }
+
+      -- Potential issues
+      if let .ok arr := notes.getObjVal? "potentialIssues" then
+        if let .arr items := arr then
+          let mut potentialIssues : Array (String × String) := #[]
+          for item in items do
+            if let (.ok id, .ok issue) := (item.getObjValAs? String "id", item.getObjValAs? String "issue") then
+              potentialIssues := potentialIssues.push (id, issue)
+          manifest := { manifest with potentialIssues := potentialIssues }
+
+      -- Technical debt
+      if let .ok arr := notes.getObjVal? "technicalDebt" then
+        if let .arr items := arr then
+          let mut technicalDebt : Array (String × String) := #[]
+          for item in items do
+            if let (.ok id, .ok debt) := (item.getObjValAs? String "id", item.getObjValAs? String "debt") then
+              technicalDebt := technicalDebt.push (id, debt)
+          manifest := { manifest with technicalDebt := technicalDebt }
+
+      -- Misc items
+      if let .ok arr := notes.getObjVal? "misc" then
+        if let .arr items := arr then
+          let mut miscItems : Array (String × String) := #[]
+          for item in items do
+            if let (.ok id, .ok note) := (item.getObjValAs? String "id", item.getObjValAs? String "note") then
+              miscItems := miscItems.push (id, note)
+          manifest := { manifest with miscItems := miscItems }
+
+    -- Extract node urls mapping
+    if let .ok nodesJson := json.getObjVal? "nodes" then
+      if let .obj entries := nodesJson then
+        let mut nodeUrls : Std.HashMap String String := {}
+        for (id, urlJson) in entries.toArray do
+          if let .str url := urlJson then
+            nodeUrls := nodeUrls.insert id url
+        manifest := { manifest with nodeUrls := nodeUrls }
+
+    return manifest
+
+/-- Check if manifest has enhanced format (with stats) vs simple format (just label->path) -/
+def EnhancedManifest.hasStats (m : EnhancedManifest) : Bool :=
+  m.stats.isSome
+
+/-- Get key theorem status for a node ID -/
+def EnhancedManifest.isKeyTheorem (m : EnhancedManifest) (nodeId : String) : Bool :=
+  m.keyTheorems.contains nodeId
+
+/-- Get message for a node ID -/
+def EnhancedManifest.getMessage (m : EnhancedManifest) (nodeId : String) : Option String :=
+  m.messages.find? (·.1 == nodeId) |>.map (·.2)
+
+/-- Get priority for a node ID -/
+def EnhancedManifest.getPriority (m : EnhancedManifest) (nodeId : String) : Option String :=
+  m.priorityItems.find? (·.1 == nodeId) |>.map (·.2)
+
+/-- Get blocked reason for a node ID -/
+def EnhancedManifest.getBlocked (m : EnhancedManifest) (nodeId : String) : Option String :=
+  m.blockedItems.find? (·.1 == nodeId) |>.map (·.2)
+
+/-- Get potential issue for a node ID -/
+def EnhancedManifest.getPotentialIssue (m : EnhancedManifest) (nodeId : String) : Option String :=
+  m.potentialIssues.find? (·.1 == nodeId) |>.map (·.2)
+
+/-- Get technical debt for a node ID -/
+def EnhancedManifest.getTechnicalDebt (m : EnhancedManifest) (nodeId : String) : Option String :=
+  m.technicalDebt.find? (·.1 == nodeId) |>.map (·.2)
+
+/-- Get misc note for a node ID -/
+def EnhancedManifest.getMisc (m : EnhancedManifest) (nodeId : String) : Option String :=
+  m.miscItems.find? (·.1 == nodeId) |>.map (·.2)
+
 end Runway.Dress

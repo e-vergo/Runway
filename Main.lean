@@ -33,6 +33,7 @@ namespace Runway.CLI
 open System (FilePath)
 open Std (HashMap HashSet)
 open Runway (loadDepGraph loadDeclArtifacts DeclArtifact)
+open Runway.Dress (loadEnhancedManifest EnhancedManifest)
 open Runway.Latex (parseFile extractChapters extractSections extractModuleRefs extractNodeRefs toHtml)
 
 /-- CLI configuration parsed from command-line arguments -/
@@ -335,8 +336,39 @@ def assignDisplayNumbers (nodes : Array NodeInfo) (chapters : Array ChapterInfo)
     | some num => { node with displayNumber := some num }
     | none => node
 
+/-- Parse StatusCounts from JSON -/
+def parseStatusCounts (json : Lean.Json) : Option StatusCounts :=
+  let getNat (key : String) : Nat := (json.getObjValAs? Nat key).toOption.getD 0
+  some {
+    notReady := getNat "notReady"
+    stated := getNat "stated"
+    ready := getNat "ready"
+    hasSorry := getNat "hasSorry"
+    proven := getNat "proven"
+    fullyProven := getNat "fullyProven"
+    mathlibReady := getNat "mathlibReady"
+    inMathlib := getNat "inMathlib"
+    total := getNat "total"
+  }
+
+/-- Parse Priority from string -/
+def parsePriority (s : String) : Option Priority :=
+  match s.replace "\"" "" with  -- Remove quotes from JSON string
+  | "high" => some .high
+  | "medium" => some .medium
+  | "low" => some .low
+  | _ => none
+
 /-- Build a BlueprintSite from Dress artifacts -/
 def buildSiteFromArtifacts (config : Config) (dressedDir : FilePath) : IO BlueprintSite := do
+  -- Load the enhanced manifest (contains stats and node metadata)
+  let manifest ← loadEnhancedManifest dressedDir
+  if manifest.hasStats then
+    IO.println s!"  - Loaded enhanced manifest with precomputed stats"
+
+  -- Parse precomputed stats from manifest if available
+  let precomputedStats := manifest.stats.bind parseStatusCounts
+
   -- Load the dependency graph
   let depGraph ← loadDepGraph dressedDir
 
@@ -369,6 +401,15 @@ def buildSiteFromArtifacts (config : Config) (dressedDir : FilePath) : IO Bluepr
       | some art => art.leanProofBodyHtml.filter (·.isEmpty == false)
       | none => none
 
+    -- Get node metadata from manifest (use original node.id for lookup)
+    let keyTheorem := manifest.isKeyTheorem node.id
+    let message := manifest.getMessage node.id
+    let priority := manifest.getPriority node.id |>.bind parsePriority
+    let blocked := manifest.getBlocked node.id
+    let potentialIssue := manifest.getPotentialIssue node.id
+    let technicalDebt := manifest.getTechnicalDebt node.id
+    let misc := manifest.getMisc node.id
+
     nodes := nodes.push {
       label := normalizedId  -- Use normalized label for consistent lookup
       title := some node.label
@@ -384,6 +425,14 @@ def buildSiteFromArtifacts (config : Config) (dressedDir : FilePath) : IO Bluepr
       declNames := node.leanDecls
       uses := (depGraph.inEdges node.id).map (·.from_.replace ":" "-")
       url := node.url.replace ":" "-"  -- Normalize URL anchor to match HTML id
+      -- Node metadata from manifest
+      keyTheorem := keyTheorem
+      message := message
+      priority := priority
+      blocked := blocked
+      potentialIssue := potentialIssue
+      technicalDebt := technicalDebt
+      misc := misc
     }
 
   -- If no nodes from graph, build from artifacts directly
@@ -395,6 +444,15 @@ def buildSiteFromArtifacts (config : Config) (dressedDir : FilePath) : IO Bluepr
       -- Extract Lean signature and proof body HTML separately for right column
       let signatureHtml := art.leanSignatureHtml.filter (·.isEmpty == false)
       let proofBodyHtml := art.leanProofBodyHtml.filter (·.isEmpty == false)
+
+      -- Get node metadata from manifest
+      let keyTheorem := manifest.isKeyTheorem key
+      let message := manifest.getMessage key
+      let priority := manifest.getPriority key |>.bind parsePriority
+      let blocked := manifest.getBlocked key
+      let potentialIssue := manifest.getPotentialIssue key
+      let technicalDebt := manifest.getTechnicalDebt key
+      let misc := manifest.getMisc key
 
       finalNodes := finalNodes.push {
         label := key
@@ -411,6 +469,14 @@ def buildSiteFromArtifacts (config : Config) (dressedDir : FilePath) : IO Bluepr
         declNames := if art.name.isEmpty then #[] else #[art.name.toName]
         uses := art.uses.map (·.replace ":" "-")  -- Normalize dependency labels
         url := s!"#node-{key}"
+        -- Node metadata from manifest
+        keyTheorem := keyTheorem
+        message := message
+        priority := priority
+        blocked := blocked
+        potentialIssue := potentialIssue
+        technicalDebt := technicalDebt
+        misc := misc
       }
 
   -- Load chapters from blueprint.tex if configured
@@ -427,6 +493,7 @@ def buildSiteFromArtifacts (config : Config) (dressedDir : FilePath) : IO Bluepr
     depGraphSvg := depGraphSvg
     depGraphJson := depGraphJson
     chapters := chapters
+    precomputedStats := precomputedStats
   }
 
 /-- Execute the build command -/

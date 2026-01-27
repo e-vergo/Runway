@@ -459,12 +459,12 @@ def renderMultiPageIndex (site : BlueprintSite) : RenderM Html := do
     .tag "h1" #[] (Html.text true config.title)
   )
 
-  -- Progress section
-  let progress := renderProgress site
+  -- Dashboard section (2x2 grid with progress, key theorems, messages, notes)
+  let dashboard := renderDashboard site
 
   return divClass "index-page" (
     titleSection ++
-    progress
+    dashboard
   )
 
 /-- Generate multi-page site with chapter-based navigation -/
