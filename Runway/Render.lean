@@ -303,7 +303,9 @@ def renderPage (title : String) (nodes : Array NodeInfo) : RenderM Html := do
 /-! ## Progress Statistics -/
 
 /-- Render a single pie slice as an SVG path arc.
-    Uses cumulative offset for positioning. Returns the path element and updated offset. -/
+    Uses cumulative offset for positioning. Returns the path element and updated offset.
+    The offset parameter tracks cumulative percentage used so far.
+    dashOffset uses negative value to position the start of each slice correctly. -/
 private def renderPieSlice (count : Nat) (total : Nat) (offset : Float) (color : String) : Html × Float :=
   if count == 0 || total == 0 then
     (Html.empty, offset)
@@ -312,7 +314,8 @@ private def renderPieSlice (count : Nat) (total : Nat) (offset : Float) (color :
     -- For stroke-dasharray technique on a circle with r=8 (circumference = 2*pi*8 ≈ 50.27)
     let circumference := 50.27
     let dashLen := pct * circumference / 100.0
-    let dashOffset := (100.0 - offset) * circumference / 100.0
+    -- Use negative offset to position the start of this slice at the correct rotation
+    let dashOffset := -offset * circumference / 100.0
     let slice := .tag "circle" #[
       ("cx", "16"), ("cy", "16"), ("r", "8"),
       ("fill", "transparent"),
