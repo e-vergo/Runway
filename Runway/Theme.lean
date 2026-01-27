@@ -104,10 +104,18 @@ def renderSidebar (chapters : Array ChapterInfo) (currentSlug : Option String) (
     | some url => .tag "li" #[] (.tag "a" #[("href", url), ("target", "_blank")] (Html.text true "API Docs"))
     | none => Html.empty
 
+  -- Theme toggle element
+  let themeToggle := divClass "theme-toggle" (
+    .tag "span" #[("class", "theme-toggle-icon sun")] (Html.text true "☀") ++
+    .tag "span" #[("class", "theme-toggle-switch")] Html.empty ++
+    .tag "span" #[("class", "theme-toggle-icon moon")] (Html.text true "☾")
+  )
+
   .tag "nav" #[("class", "toc")] (
     .tag "ul" #[("class", "sub-toc-0")] (
       .seq #[homeItem] ++ .seq chapterItems ++ .seq #[separator, graphItem, paperItem, separator, githubItem, docsItem]
-    )
+    ) ++
+    themeToggle
   )
 
 /-- Render prev/next navigation links -/
@@ -196,6 +204,12 @@ def primaryTemplate : Template := fun content => do
             .tag "li" #[("class", "active")] (
               .tag "a" #[("href", s!"{toRoot}index.html")] (Html.text true "Blueprint Home")
             )
+          ) ++
+          -- Theme toggle
+          divClass "theme-toggle" (
+            .tag "span" #[("class", "theme-toggle-icon sun")] (Html.text true "☀") ++
+            .tag "span" #[("class", "theme-toggle-switch")] Html.empty ++
+            .tag "span" #[("class", "theme-toggle-icon moon")] (Html.text true "☾")
           )
         ) ++
         -- Main content area

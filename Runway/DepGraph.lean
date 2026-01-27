@@ -407,10 +407,18 @@ private def renderDepGraphSidebar (chapters : Array ChapterInfo) (toRoot : Strin
     | some url => .tag "li" #[] (.tag "a" #[("href", url), ("target", "_blank")] (Html.text true "API Docs"))
     | none => Html.empty
 
+  -- Theme toggle element
+  let themeToggle := .tag "div" #[("class", "theme-toggle")] (
+    .tag "span" #[("class", "theme-toggle-icon sun")] (Html.text true "☀") ++
+    .tag "span" #[("class", "theme-toggle-switch")] Html.empty ++
+    .tag "span" #[("class", "theme-toggle-icon moon")] (Html.text true "☾")
+  )
+
   .tag "nav" #[("class", "toc")] (
     .tag "ul" #[("class", "sub-toc-0")] (
       .seq #[homeItem] ++ .seq chapterItems ++ .seq #[separator, graphItem, paperItem, separator, githubItem, docsItem]
-    )
+    ) ++
+    themeToggle
   )
 
 /-- Create a full HTML page for the dependency graph with sidebar navigation.
