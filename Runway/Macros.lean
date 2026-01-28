@@ -224,7 +224,14 @@ def macroToMathJax (m : MacroDef) : String :=
     These handle common LaTeX commands that may not have MathJax equivalents. -/
 def defaultMacros : Array MacroDef := #[
   -- \textbf in math mode
-  { name := "textbf", argCount := 1, definition := "\\mathbf{#1}" }
+  { name := "textbf", argCount := 1, definition := "\\mathbf{#1}" },
+  -- Common mathematical notation not always defined in user's LaTeX
+  { name := "GL", argCount := 0, definition := "\\mathrm{GL}" },
+  { name := "SL", argCount := 0, definition := "\\mathrm{SL}" },
+  { name := "SO", argCount := 0, definition := "\\mathrm{SO}" },
+  { name := "SU", argCount := 0, definition := "\\mathrm{SU}" },
+  { name := "R", argCount := 0, definition := "\\mathbb{R}" },
+  { name := "C", argCount := 0, definition := "\\mathbb{C}" }
 ]
 
 /-- Convert an array of MacroDefs to MathJax macros JSON object content.
