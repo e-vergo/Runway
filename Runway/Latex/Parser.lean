@@ -255,6 +255,9 @@ partial def parseBlocks (envName : String) : ParserM (Array Block) := do
       let inlines ← parseInlines paragraphStop
       if !inlines.isEmpty then
         blocks := blocks.push (Block.paragraph inlines)
+      else
+        -- Avoid infinite loop: if parseInlines returns empty without advancing, skip the token
+        let _ ← advance
   return blocks
 
 /-- Parse an environment -/
@@ -314,6 +317,9 @@ partial def parseItems (envName : String) : ParserM (Array (Array Block)) := do
         | _ => false
       if !inlines.isEmpty then
         currentItem := currentItem.push (Block.paragraph inlines)
+      else
+        -- Avoid infinite loop: if parseInlines returns empty without advancing, skip the token
+        let _ ← advance
 
   return items
 
@@ -383,6 +389,9 @@ partial def parseBody : ParserM (Array Block) := do
       let inlines ← parseInlines paragraphStop
       if !inlines.isEmpty then
         blocks := blocks.push (Block.paragraph inlines)
+      else
+        -- Avoid infinite loop: if parseInlines returns empty without advancing, skip the token
+        let _ ← advance
 
   return blocks
 
@@ -445,6 +454,9 @@ partial def parseSectionBody (level : Nat) : ParserM (Array Block) := do
       let inlines ← parseInlines paragraphStop
       if !inlines.isEmpty then
         blocks := blocks.push (Block.paragraph inlines)
+      else
+        -- Avoid infinite loop: if parseInlines returns empty without advancing, skip the token
+        let _ ← advance
 
   return blocks
 
