@@ -538,11 +538,16 @@ def runBuild (cliConfig : CLIConfig) : IO UInt32 := do
   (← IO.getStdout).flush
   IO.println s!"[DEBUG] runBuild: Starting..."
   (← IO.getStdout).flush
+  IO.println "[DEBUG] About to print configPath..."
+  (← IO.getStdout).flush
   IO.println s!"[DEBUG] configPath = {cliConfig.configPath}"
+  (← IO.getStdout).flush
   IO.println s!"[DEBUG] buildDir = {cliConfig.buildDir}"
+  (← IO.getStdout).flush
 
   -- Load configuration
   IO.println "[DEBUG] Loading config..."
+  (← IO.getStdout).flush
   let config ← loadConfig cliConfig.configPath
   IO.println s!"[DEBUG] Config loaded. assetsDir = {config.assetsDir}"
   IO.println s!"[DEBUG] blueprintTexPath = {config.blueprintTexPath.getD "none"}"
