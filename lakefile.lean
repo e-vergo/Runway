@@ -13,8 +13,8 @@ lean_exe runway where
   supportInterpreter := true
 
 -- Dress provides: LeanArchitect, SubVerso, Verso
--- Use local path for development; change to git for releases
-require Dress from ".." / "Dress"
+require Dress from git
+  "https://github.com/e-vergo/Dress.git" @ "main"
 
 /-! ## Path Helpers -/
 
