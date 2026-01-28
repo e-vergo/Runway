@@ -560,8 +560,12 @@ def runBuild (cliConfig : CLIConfig) : IO UInt32 := do
   IO.println "[DEBUG] Loading config..."
   (← IO.getStdout).flush
   let config ← loadConfig cliConfig.configPath
+  IO.println "[DEBUG] Config loaded, about to access fields..."
+  (← IO.getStdout).flush
   IO.println s!"[DEBUG] Config loaded. assetsDir = {config.assetsDir}"
+  (← IO.getStdout).flush
   IO.println s!"[DEBUG] blueprintTexPath = {config.blueprintTexPath.getD "none"}"
+  (← IO.getStdout).flush
 
   -- Determine directories
   let dressedDir := cliConfig.buildDir / "dressed"
