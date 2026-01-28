@@ -7,6 +7,7 @@ import Runway.Latex.Lexer
 import Runway.Latex.Ast
 import Runway.Latex.Parser
 import Runway.Latex.ToHtml
+import Runway.Latex.ToLatex
 
 /-!
 # LaTeX Parsing and HTML Conversion

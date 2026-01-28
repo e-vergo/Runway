@@ -95,6 +95,12 @@ def renderSidebar (chapters : Array ChapterInfo) (currentSlug : Option String) (
     .tag "a" #[("href", s!"{toRoot}paper.html")] (Html.text true "Paper")
   )
 
+  -- PDF link (shown when PDF page exists - indicated by currentSlug == some "pdf")
+  let pdfClass := if currentSlug == some "pdf" then "active" else ""
+  let pdfItem := .tag "li" #[("class", pdfClass)] (
+    .tag "a" #[("href", s!"{toRoot}pdf.html")] (Html.text true "PDF")
+  )
+
   -- External links (GitHub, API Docs)
   let githubItem := match config.githubUrl with
     | some url => .tag "li" #[] (.tag "a" #[("href", url), ("target", "_blank")] (Html.text true "GitHub"))
@@ -113,7 +119,7 @@ def renderSidebar (chapters : Array ChapterInfo) (currentSlug : Option String) (
 
   .tag "nav" #[("class", "toc")] (
     .tag "ul" #[("class", "sub-toc-0")] (
-      .seq #[homeItem] ++ .seq chapterItems ++ .seq #[separator, graphItem, paperItem, separator, githubItem, docsItem]
+      .seq #[homeItem] ++ .seq chapterItems ++ .seq #[separator, graphItem, paperItem, pdfItem, separator, githubItem, docsItem]
     ) ++
     themeToggle
   )
@@ -314,6 +320,125 @@ def nodeTemplate : NodeTemplate := renderNode
 
 /-- Template for rendering the index page -/
 def indexTemplate : IndexTemplate := renderIndex
+
+/-- Render full-page PDF viewer with embedded PDF -/
+def renderPdfPage (chapters : Array ChapterInfo) (config : Config) : Html :=
+  let toRoot := ""
+
+  -- MathJax configuration script (not really needed for PDF page but keeps consistency)
+  let mathjaxConfig := .tag "script" #[] (Html.text false r#"
+    MathJax = {
+      tex: {
+        inlineMath: [['$', '$'], ['\\(', '\\)']],
+        displayMath: [['$$', '$$'], ['\\[', '\\]']],
+        processEscapes: true
+      },
+      options: {
+        skipHtmlTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code']
+      }
+    };
+  "#)
+
+  -- Build sidebar
+  let sidebar := renderSidebar chapters (some "pdf") toRoot config
+
+  -- PDF viewer content
+  let pdfContent := divClass "pdf-viewer-container" (
+    .tag "h1" #[] (Html.text true "PDF Document") ++
+    .tag "p" #[("class", "pdf-description")] (
+      Html.text true "View or download the compiled PDF version of this document."
+    ) ++
+    .tag "div" #[("class", "pdf-actions")] (
+      .tag "a" #[("href", "paper.pdf"), ("download", ""), ("class", "pdf-download-btn")] (
+        Html.text true "Download PDF"
+      )
+    ) ++
+    .tag "embed" #[
+      ("src", "paper.pdf"),
+      ("type", "application/pdf"),
+      ("width", "100%"),
+      ("height", "800px"),
+      ("class", "pdf-embed")
+    ] Html.empty ++
+    .tag "p" #[("class", "pdf-fallback")] (
+      Html.text true "If the PDF does not display, you can " ++
+      .tag "a" #[("href", "paper.pdf")] (Html.text true "download it directly") ++
+      Html.text true "."
+    )
+  )
+
+  .tag "html" #[("lang", "en")] (
+    .tag "head" #[] (
+      .tag "meta" #[("charset", "UTF-8")] Html.empty ++
+      .tag "meta" #[("name", "viewport"), ("content", "width=device-width, initial-scale=1")] Html.empty ++
+      .tag "title" #[] (Html.text true (config.title ++ " - PDF")) ++
+      -- Local CSS
+      .tag "link" #[("rel", "stylesheet"), ("href", s!"{toRoot}assets/common.css")] Html.empty ++
+      .tag "link" #[("rel", "stylesheet"), ("href", s!"{toRoot}assets/blueprint.css")] Html.empty ++
+      .tag "link" #[("rel", "icon"), ("href", "data:,")] Html.empty ++
+      -- Inline styles for PDF page
+      .tag "style" #[] (Html.text false "
+        .pdf-viewer-container {
+          padding: 1rem;
+        }
+        .pdf-viewer-container h1 {
+          margin-bottom: 0.5rem;
+        }
+        .pdf-description {
+          color: #666;
+          margin-bottom: 1rem;
+        }
+        .pdf-actions {
+          margin-bottom: 1rem;
+        }
+        .pdf-download-btn {
+          display: inline-block;
+          padding: 0.5rem 1rem;
+          background: #007bff;
+          color: white;
+          text-decoration: none;
+          border-radius: 4px;
+        }
+        .pdf-download-btn:hover {
+          background: #0056b3;
+        }
+        .pdf-embed {
+          border: 1px solid #ddd;
+          border-radius: 4px;
+        }
+        .pdf-fallback {
+          margin-top: 1rem;
+          color: #666;
+          font-size: 0.9rem;
+        }
+      ") ++
+      mathjaxConfig ++
+      .tag "script" #[("id", "MathJax-script"), ("async", ""),
+                      ("src", "https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js")] Html.empty
+    ) ++
+    .tag "body" #[] (
+      -- Header
+      .tag "header" #[] (
+        .tag "nav" #[("class", "header")] (
+          divClass "nav-wrapper" (
+            .tag "span" #[("id", "toc-toggle")] (Html.text true "☰")
+          )
+        )
+      ) ++
+      -- Main wrapper with sidebar and content
+      divClass "wrapper" (
+        sidebar ++
+        divClass "content" pdfContent
+      ) ++
+      -- jQuery (for sidebar toggle)
+      .tag "script" #[("src", "https://code.jquery.com/jquery-3.7.1.min.js"),
+                      ("integrity", "sha256-/JqT3SQfawRcv/BIHPThkBvs0OEvtFFmqPF/lYI/Cxo="),
+                      ("crossorigin", "anonymous")] Html.empty ++
+      -- Local JavaScript
+      .tag "script" #[("src", s!"{toRoot}assets/plastex.js")] Html.empty ++
+      .tag "script" #[("src", s!"{toRoot}assets/verso-code.js")] Html.empty
+    )
+  )
 
 end DefaultTheme
 

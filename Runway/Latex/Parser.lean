@@ -465,6 +465,7 @@ end
 /-- Parse preamble -/
 def parsePreamble : ParserM Preamble := do
   let mut preamble : Preamble := {}
+  let mut rawLines : Array String := #[]
 
   while true do
     skipTrivia
@@ -498,11 +499,27 @@ def parsePreamble : ParserM Preamble := do
         preamble := { preamble with date := some (← parseBraceContent) }
       | "begin" => break
       | _ =>
+        -- Capture unknown commands as raw content
+        let mut cmdText := "\\" ++ name
         let _ ← advance
-        let _ ← parseBraceContent
+        -- Collect all bracket and brace arguments
+        while true do
+          skipTrivia
+          match ← peekKind with
+          | some .bracketOpen =>
+            if let some content ← parseBracketContent then
+              cmdText := cmdText ++ "[" ++ content ++ "]"
+            else
+              break
+          | some .braceOpen =>
+            let content ← parseBraceContent
+            cmdText := cmdText ++ "{" ++ content ++ "}"
+          | _ => break
+        rawLines := rawLines.push cmdText
     | _ =>
       let _ ← advance
 
+  preamble := { preamble with rawContent := "\n".intercalate rawLines.toList }
   return preamble
 
 /-- Parse complete document -/

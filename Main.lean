@@ -4,6 +4,8 @@ Released under Apache 2.0 license as described in the file LICENSE.
 -/
 import Runway
 import Runway.Paper
+import Runway.Latex.ToLatex
+import Runway.Pdf
 
 /-!
 # Runway CLI
@@ -52,6 +54,8 @@ structure CLIConfig where
   command : String := "build"
   /-- Path to paper.tex (optional, overrides config) -/
   paperTexPath : Option FilePath := none
+  /-- Generate .tex only without PDF compilation -/
+  texOnly : Bool := false
   deriving Repr, Inhabited
 
 /-- Parse command-line arguments into CLIConfig -/
@@ -75,6 +79,9 @@ def parseArgs (args : List String) : Except String CLIConfig := do
     | "--output" :: path :: rest =>
       config := { config with outputDir := some path }
       remaining := rest
+    | "--tex-only" :: rest =>
+      config := { config with texOnly := true }
+      remaining := rest
     | "--build-dir" :: [] | "--output" :: [] =>
       throw "Missing argument for option"
     | arg :: rest =>
@@ -90,7 +97,7 @@ def parseArgs (args : List String) : Except String CLIConfig := do
   match positionalArgs with
   | [] => pure ()
   | [cmd] =>
-    if cmd == "build" || cmd == "serve" || cmd == "check" || cmd == "paper" then
+    if cmd == "build" || cmd == "serve" || cmd == "check" || cmd == "paper" || cmd == "pdf" then
       config := { config with command := cmd }
     else if cmd.endsWith ".json" then
       config := { config with configPath := cmd }
@@ -711,6 +718,109 @@ def runBuild (cliConfig : CLIConfig) : IO UInt32 := do
   if !site.chapters.isEmpty then
     IO.println s!"  - {site.chapters.size} chapters"
 
+  -- Generate paper.html and PDF if paperTexPath is configured
+  let mut pdfGenerated := false
+  match config.paperTexPath with
+  | none => pure ()
+  | some texPathStr =>
+    let texPath : FilePath := texPathStr
+    if ← texPath.pathExists then
+      IO.println s!"[DEBUG] Generating paper from {texPath}..."
+
+      -- Parse paper.tex
+      let (doc, errors) ← parseFile texPath
+      for err in errors do
+        IO.eprintln s!"    LaTeX parse warning: {err}"
+
+      -- Build artifact map from nodes
+      let mut artifacts : HashMap String NodeInfo := {}
+      for node in site.nodes do
+        artifacts := artifacts.insert node.label node
+
+      -- Generate paper.html (reuse paper command logic)
+      let docContent := Runway.Paper.convertDocument doc artifacts config
+      let paperContent := Runway.Paper.renderPaperContent config docContent
+      let ctx : Runway.Render.Context := {
+        config := config
+        depGraph := site.depGraph
+        path := #[]
+      }
+      let paperTemplate := Runway.DefaultTheme.primaryTemplateWithSidebar site.chapters (some "paper")
+      let (paperHtml, _) ← paperTemplate paperContent |>.run ctx
+      let paperOutputPath := outputDir / "paper.html"
+      IO.FS.writeFile paperOutputPath (Verso.Output.Html.doctype ++ "\n" ++ paperHtml.asString)
+      IO.println s!"  - Generated paper.html"
+
+      -- Generate PDF from paper.tex
+      IO.println "[DEBUG] Starting PDF generation..."
+
+      -- Generate resolved LaTeX
+      let latexConfig : Runway.Latex.LatexConfig := {
+        preserveSourcePreamble := true
+      }
+      let result := Runway.Latex.documentToLatex doc artifacts latexConfig
+      IO.println s!"  - Resolved {result.nodeRefs.size} node references for PDF"
+
+      -- Print any warnings
+      for warning in result.warnings do
+        IO.eprintln s!"    Warning: {warning}"
+
+      -- Write resolved LaTeX to temporary file in output directory
+      let texOutputPath := outputDir / "paper-resolved.tex"
+      IO.FS.writeFile texOutputPath result.latex
+
+      -- Detect or use configured compiler
+      let compiler ← match config.pdfCompiler with
+        | some compStr => pure (Runway.Pdf.Compiler.fromString? compStr)
+        | none => Runway.Pdf.detectCompiler
+
+      match compiler with
+      | none =>
+        IO.eprintln "Warning: No LaTeX compiler found (pdflatex, tectonic, xelatex, lualatex)."
+        IO.eprintln "Skipping PDF generation. Install a LaTeX distribution to enable PDF output."
+      | some comp =>
+        IO.println s!"  - Compiling PDF with {comp}..."
+        let pdfConfig : Runway.Pdf.PdfConfig := {
+          compiler := comp
+          passes := 2
+          keepAuxFiles := false
+        }
+
+        match ← Runway.Pdf.runCompiler pdfConfig texOutputPath with
+        | .success resolvedPdfPath _ =>
+          -- Rename paper-resolved.pdf to paper.pdf for cleaner URL
+          let finalPdfPath := outputDir / "paper.pdf"
+          -- Copy content (since rename across filesystems may fail)
+          let pdfContent ← IO.FS.readBinFile resolvedPdfPath
+          IO.FS.writeBinFile finalPdfPath pdfContent
+          -- Remove the -resolved version
+          if resolvedPdfPath != finalPdfPath then
+            try IO.FS.removeFile resolvedPdfPath catch _ => pure ()
+          IO.println s!"  - Generated paper.pdf"
+          pdfGenerated := true
+
+          -- Generate pdf.html with embedded PDF viewer
+          let pdfPageHtml := Runway.DefaultTheme.renderPdfPage site.chapters config
+          let pdfPageOutputPath := outputDir / "pdf.html"
+          IO.FS.writeFile pdfPageOutputPath (Verso.Output.Html.doctype ++ "\n" ++ pdfPageHtml.asString)
+          IO.println s!"  - Generated pdf.html"
+        | .compilerNotFound name =>
+          IO.eprintln s!"Warning: Compiler '{name}' not found, skipping PDF generation."
+        | .compilationFailed exitCode logOutput =>
+          IO.eprintln s!"Warning: PDF compilation failed (exit code {exitCode})"
+          -- Show last 20 lines of output
+          let lines := logOutput.splitOn "\n"
+          let lastLines := lines.drop (lines.length - 20)
+          for line in lastLines do
+            IO.eprintln s!"    {line}"
+        | .texFileNotFound path =>
+          IO.eprintln s!"Warning: Resolved tex file not found at {path}"
+
+      -- Clean up resolved tex file
+      try IO.FS.removeFile texOutputPath catch _ => pure ()
+    else
+      IO.eprintln s!"Warning: paper.tex not found at {texPath}, skipping paper and PDF generation."
+
   return 0
 
 /-- Execute the serve command -/
@@ -899,6 +1009,118 @@ body.ar5iv-paper {
 .paper-error { color: #dc3545; background: #f8d7da; padding: 0.5rem; margin: 0.5rem 0; border-radius: 3px; }
 "
 
+/-- Execute the pdf command - generate PDF from blueprint.tex or paper.tex -/
+def runPdf (cliConfig : CLIConfig) : IO UInt32 := do
+  IO.println "Runway: Generating PDF..."
+
+  -- Load configuration
+  let config ← loadConfig cliConfig.configPath
+
+  -- Determine source tex path (CLI override, paperTexPath, or blueprintTexPath)
+  let texPathStr := cliConfig.paperTexPath.map toString
+    |>.orElse (fun _ => config.paperTexPath)
+    |>.orElse (fun _ => config.blueprintTexPath)
+
+  match texPathStr with
+  | none =>
+    IO.eprintln "Error: No source tex file specified."
+    IO.eprintln "Set 'paperTexPath' or 'blueprintTexPath' in runway.json, or use --paper-tex option."
+    return 1
+  | some pathStr =>
+    let texPath : FilePath := pathStr
+
+    if !(← texPath.pathExists) then
+      IO.eprintln s!"Error: Source tex file not found at {texPath}"
+      return 1
+
+    IO.println s!"  - Parsing {texPath}"
+
+    -- Parse the tex file
+    let (doc, errors) ← parseFile texPath
+    for err in errors do
+      IO.eprintln s!"    LaTeX parse warning: {err}"
+
+    -- Load artifacts
+    let dressedDir := cliConfig.buildDir / "dressed"
+    if !(← dressedDir.pathExists) then
+      IO.eprintln s!"Error: Dressed artifacts not found at {dressedDir}"
+      IO.eprintln "Run 'lake build' to generate Dress artifacts first."
+      return 1
+
+    let site ← buildSiteFromArtifacts config dressedDir
+    IO.println s!"  - Loaded {site.nodes.size} nodes from artifacts"
+
+    -- Build artifact map
+    let mut artifacts : HashMap String NodeInfo := {}
+    for node in site.nodes do
+      artifacts := artifacts.insert node.label node
+
+    -- Generate resolved LaTeX
+    let latexConfig : Runway.Latex.LatexConfig := {
+      preserveSourcePreamble := true
+    }
+    let result := Runway.Latex.documentToLatex doc artifacts latexConfig
+    IO.println s!"  - Resolved {result.nodeRefs.size} node references"
+
+    -- Print any warnings
+    for warning in result.warnings do
+      IO.eprintln s!"    Warning: {warning}"
+
+    -- Determine output paths
+    let outputDir := cliConfig.outputDir.getD (cliConfig.buildDir / "runway")
+    IO.FS.createDirAll outputDir
+
+    let baseName := texPath.fileStem.getD "document"
+    let texOutputPath := outputDir / (baseName ++ "-resolved.tex")
+
+    -- Write resolved LaTeX
+    IO.FS.writeFile texOutputPath result.latex
+    IO.println s!"  - Generated {texOutputPath}"
+
+    -- Compile to PDF unless --tex-only
+    if cliConfig.texOnly then
+      IO.println s!"Generated LaTeX at {texOutputPath} (--tex-only mode)"
+      return 0
+
+    -- Detect or use configured compiler
+    let compiler ← match config.pdfCompiler with
+      | some compStr => pure (Runway.Pdf.Compiler.fromString? compStr)
+      | none => Runway.Pdf.detectCompiler
+
+    match compiler with
+    | none =>
+      IO.eprintln "Warning: No LaTeX compiler found (pdflatex, tectonic, xelatex, lualatex)."
+      IO.eprintln "Generated .tex file only. Install a LaTeX distribution to compile to PDF."
+      return 0
+    | some comp =>
+      IO.println s!"  - Compiling with {comp}..."
+      let pdfConfig : Runway.Pdf.PdfConfig := {
+        compiler := comp
+        passes := 2
+        keepAuxFiles := false
+      }
+
+      match ← Runway.Pdf.runCompiler pdfConfig texOutputPath with
+      | .success pdfPath _ =>
+        IO.println s!"  - Generated {pdfPath}"
+        IO.println s!"PDF generated at {pdfPath}"
+        return 0
+      | .compilerNotFound name =>
+        IO.eprintln s!"Error: Compiler '{name}' not found"
+        return 1
+      | .compilationFailed exitCode logOutput =>
+        IO.eprintln s!"Error: Compilation failed (exit code {exitCode})"
+        IO.eprintln "Compiler output:"
+        -- Show last 50 lines of output
+        let lines := logOutput.splitOn "\n"
+        let lastLines := lines.drop (lines.length - 50)
+        for line in lastLines do
+          IO.eprintln line
+        return 1
+      | .texFileNotFound path =>
+        IO.eprintln s!"Error: Generated tex file not found at {path}"
+        return 1
+
 /-- Show help message -/
 def showHelp : IO Unit := do
   IO.println "Runway - Presentation layer for Lean mathematical blueprints"
@@ -908,12 +1130,14 @@ def showHelp : IO Unit := do
   IO.println "Commands:"
   IO.println "  build    Generate HTML from Dress artifacts (default)"
   IO.println "  paper    Generate ar5iv-style paper from paper.tex"
+  IO.println "  pdf      Generate PDF from blueprint.tex (resolves \\inputleannode hooks)"
   IO.println "  serve    Start local HTTP server for preview"
   IO.println "  check    Verify Lean declarations exist"
   IO.println ""
   IO.println "Options:"
   IO.println "  --build-dir <path>   Lake build directory (default: .lake/build)"
   IO.println "  --output <path>      Output directory (default: .lake/build/runway)"
+  IO.println "  --tex-only           Generate .tex file only (no PDF compilation)"
   IO.println "  -h, --help           Show this help message"
   IO.println "  -v, --version        Show version information"
   IO.println ""
@@ -922,6 +1146,8 @@ def showHelp : IO Unit := do
   IO.println "  runway build runway.json        Build site with custom config"
   IO.println "  runway --output _site build     Build to custom output directory"
   IO.println "  runway paper                    Generate paper from paper.tex"
+  IO.println "  runway pdf                      Generate PDF from blueprint.tex"
+  IO.println "  runway pdf --tex-only           Generate .tex only (no compilation)"
   IO.println "  runway serve                    Start local preview server"
 
 /-- Show version information -/
@@ -954,6 +1180,7 @@ def main (args : List String) : IO UInt32 := do
       match cliConfig.command with
       | "build" => Runway.CLI.runBuild cliConfig
       | "paper" => Runway.CLI.runPaper cliConfig
+      | "pdf" => Runway.CLI.runPdf cliConfig
       | "serve" => Runway.CLI.runServe cliConfig
       | "check" => Runway.CLI.runCheck cliConfig
       | cmd =>

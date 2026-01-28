@@ -40,6 +40,8 @@ structure Config where
   paperAuthors : Array String := #[]
   /-- Paper abstract -/
   paperAbstract : Option String := none
+  /-- Preferred PDF compiler (pdflatex, tectonic, xelatex, lualatex) -/
+  pdfCompiler : Option String := none
   deriving Inhabited, Repr
 
 instance : ToJson Config where
@@ -55,7 +57,8 @@ instance : ToJson Config where
     ("paperTexPath", match c.paperTexPath with | some p => .str p | none => .null),
     ("paperTitle", match c.paperTitle with | some t => .str t | none => .null),
     ("paperAuthors", ToJson.toJson c.paperAuthors),
-    ("paperAbstract", match c.paperAbstract with | some a => .str a | none => .null)
+    ("paperAbstract", match c.paperAbstract with | some a => .str a | none => .null),
+    ("pdfCompiler", match c.pdfCompiler with | some p => .str p | none => .null)
   ]
 
 instance : FromJson Config where
@@ -72,6 +75,7 @@ instance : FromJson Config where
     let paperTitle : Option String := (j.getObjValAs? String "paperTitle").toOption
     let paperAuthors : Array String ← j.getObjValAs? (Array String) "paperAuthors" <|> pure #[]
     let paperAbstract : Option String := (j.getObjValAs? String "paperAbstract").toOption
+    let pdfCompiler : Option String := (j.getObjValAs? String "pdfCompiler").toOption
     return {
       title := title
       projectName := projectName
@@ -85,6 +89,7 @@ instance : FromJson Config where
       paperTitle := paperTitle
       paperAuthors := paperAuthors
       paperAbstract := paperAbstract
+      pdfCompiler := pdfCompiler
     }
 
 end Runway
