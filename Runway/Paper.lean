@@ -291,6 +291,79 @@ where
     | c :: rest =>
       go rest (acc.push c) inMath tagStack
 
+/-- Convert LaTeX list environments (itemize/enumerate) to HTML lists.
+    This handles common cases where docstrings contain LaTeX list syntax.
+    Processing is done outside of math mode only. -/
+partial def latexListsToHtml (s : String) : String := Id.run do
+  let mut result := s
+  -- Convert \begin{itemize}...\end{itemize} to <ul>...</ul>
+  result := convertEnv result "itemize" "ul"
+  -- Convert \begin{enumerate}...\end{enumerate} to <ol>...</ol>
+  result := convertEnv result "enumerate" "ol"
+  return result
+where
+  /-- Convert a LaTeX environment to an HTML tag -/
+  convertEnv (input : String) (envName : String) (htmlTag : String) : String := Id.run do
+    let beginTag := s!"\\begin\{{envName}}"
+    let endTag := s!"\\end\{{envName}}"
+    let mut result := input
+
+    -- Replace begin/end tags
+    result := result.replace beginTag s!"<{htmlTag}>"
+    result := result.replace endTag s!"</{htmlTag}>"
+
+    -- Convert \item to <li>...</li>
+    -- This is simplified: we find \item and wrap until next \item or end tag
+    result := convertItems result htmlTag
+
+    return result
+
+  /-- Convert \item entries within a list to <li> elements -/
+  convertItems (input : String) (htmlTag : String) : String := Id.run do
+    let chars := input.toList
+    let mut result := ""
+    let mut i := 0
+    let mut inList := false
+    let mut inListItem := false
+
+    while i < chars.length do
+      -- Check for <ul> or <ol> start
+      if i + 3 < chars.length &&
+         chars[i]! == '<' && (
+           (chars[i+1]! == 'u' && chars[i+2]! == 'l' && chars[i+3]! == '>') ||
+           (chars[i+1]! == 'o' && chars[i+2]! == 'l' && chars[i+3]! == '>')) then
+        result := result ++ String.mk (chars.drop i |>.take 4)
+        i := i + 4
+        inList := true
+      -- Check for </ul> or </ol> end
+      else if i + 4 < chars.length &&
+              chars[i]! == '<' && chars[i+1]! == '/' && (
+                (chars[i+2]! == 'u' && chars[i+3]! == 'l' && chars[i+4]! == '>') ||
+                (chars[i+2]! == 'o' && chars[i+3]! == 'l' && chars[i+4]! == '>')) then
+        if inListItem then
+          result := result ++ "</li>"
+          inListItem := false
+        result := result ++ String.mk (chars.drop i |>.take 5)
+        i := i + 5
+        inList := false
+      -- Check for \item
+      else if inList && i + 4 < chars.length &&
+              chars[i]! == '\\' && chars[i+1]! == 'i' && chars[i+2]! == 't' &&
+              chars[i+3]! == 'e' && chars[i+4]! == 'm' then
+        if inListItem then
+          result := result ++ "</li>"
+        result := result ++ "<li>"
+        i := i + 5
+        inListItem := true
+        -- Skip optional space after \item
+        while i < chars.length && (chars[i]! == ' ' || chars[i]! == '\n') do
+          i := i + 1
+      else
+        result := result.push chars[i]!
+        i := i + 1
+
+    return result
+
 /-- Convert NodeStatus to VerificationLevel -/
 def nodeStatusToVerificationLevel (status : NodeStatus) : VerificationLevel :=
   match status with
@@ -298,13 +371,17 @@ def nodeStatusToVerificationLevel (status : NodeStatus) : VerificationLevel :=
   | .sorry | .stated | .ready => .inProgress
   | .notReady => .notStarted
 
+/-- Convert LaTeX content to HTML by processing lists and text commands -/
+def latexToHtml (s : String) : String :=
+  latexTextToHtml (latexListsToHtml s)
+
 /-- Build a PaperNodeInfo from a NodeInfo -/
 def toPaperNodeInfo (node : NodeInfo) (baseUrl : String := "") : PaperNodeInfo :=
   { label := node.label
     envType := node.envType
     displayNumber := node.displayNumber.getD node.label
-    statement := latexTextToHtml node.statementHtml
-    proof := node.proofHtml.map latexTextToHtml
+    statement := latexToHtml node.statementHtml
+    proof := node.proofHtml.map latexToHtml
     status := nodeStatusToVerificationLevel node.status
     blueprintUrl := some (baseUrl ++ "index.html#node-" ++ node.label)
   }
@@ -314,8 +391,8 @@ def toPaperNodeInfoExt (node : NodeInfo) (baseUrl : String := "") : PaperNodeInf
   { label := node.label
     envType := node.envType
     displayNumber := node.displayNumber.getD node.label
-    statement := latexTextToHtml node.statementHtml
-    proof := node.proofHtml.map latexTextToHtml
+    statement := latexToHtml node.statementHtml
+    proof := node.proofHtml.map latexToHtml
     status := nodeStatusToVerificationLevel node.status
     blueprintUrl := some (baseUrl ++ "index.html#" ++ node.label)
     signatureHtml := node.signatureHtml
@@ -421,7 +498,10 @@ private partial def blockToHtmlString (artifacts : HashMap String NodeInfo) (bas
       let paperNode := toPaperNodeInfo node baseUrl
       (renderProofOnly paperNode).asString
     | none => s!"<div class=\"paper-error\">Proof not found: {label}</div>\n"
-  | .raw content => content
+  | .raw content =>
+    -- Filter out abstract environment (already rendered from config)
+    if (content.splitOn "\\begin{abstract}").length > 1 then ""
+    else content
   | .comment _ => ""
 
 /-- Convert a parsed document to paper HTML, resolving paper hooks -/
