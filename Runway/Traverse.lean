@@ -212,6 +212,42 @@ private def stripUsesCommand (content : String) : String := Id.run do
     result := beforeUses ++ afterClosingBrace
   return result.trimAscii.toString
 
+/-- Convert LaTeX list environments to HTML.
+    Converts \begin{itemize}...\end{itemize} to <ul>...<li>...</li>...</ul>
+    and \begin{enumerate}...\end{enumerate} to <ol>...<li>...</li>...</ol> -/
+private def convertLatexListsToHtml (content : String) : String := Id.run do
+  let mut result := content
+
+  -- Convert itemize environments
+  result := result.replace "\\begin{itemize}" "<ul>"
+  result := result.replace "\\end{itemize}" "</ul>"
+
+  -- Convert enumerate environments
+  result := result.replace "\\begin{enumerate}" "<ol>"
+  result := result.replace "\\end{enumerate}" "</ol>"
+
+  -- Convert \item to <li>
+  -- We need to close previous <li> before opening a new one
+  -- Strategy: replace \item with </li><li>, then fix up first/last
+  if containsSubstr result "\\item" then
+    let parts := result.splitOn "\\item"
+    if parts.length > 1 then
+      let mut newResult := parts[0]!
+      for i in [1:parts.length] do
+        -- Add <li> before each item content
+        newResult := newResult ++ "<li>" ++ parts[i]!.trimAscii
+      result := newResult
+      -- Close the last <li> before </ul> or </ol>
+      result := result.replace "<li></ul>" "</ul>"
+      result := result.replace "<li></ol>" "</ol>"
+      -- Handle case where </ul> or </ol> comes after item content
+      result := result.replace "</ul>" "</li></ul>"
+      result := result.replace "</ol>" "</li></ol>"
+      -- Fix double closing tags that might result
+      result := result.replace "</li></li>" "</li>"
+
+  return result
+
 /-- Parse a decl.tex file and extract artifact data -/
 def parseDeclTex (content : String) : DeclArtifact := Id.run do
   let mut artifact : DeclArtifact := { name := "", label := "" }
@@ -282,9 +318,9 @@ def parseDeclTex (content : String) : DeclArtifact := Id.run do
     -- Find the LaTeX statement: text after \leanok (first occurrence in theorem block) until end marker
     -- But we need to handle the case where \leanok comes after \uses{}
     if let some text := extractBetween theoremBlock "\\leanok\n" endMarker then
-      artifact := { artifact with latexStatement := some (stripUsesCommand text) }
+      artifact := { artifact with latexStatement := some (convertLatexListsToHtml (stripUsesCommand text)) }
     else if let some text := extractBetween theoremBlock "\\leanok" endMarker then
-      artifact := { artifact with latexStatement := some (stripUsesCommand text) }
+      artifact := { artifact with latexStatement := some (convertLatexListsToHtml (stripUsesCommand text)) }
 
   -- Extract LaTeX proof text (between \leanok in proof block and \end{proof})
   if containsSubstr content "\\begin{proof}" then
@@ -292,12 +328,12 @@ def parseDeclTex (content : String) : DeclArtifact := Id.run do
     if let some proofBlock := extractBetween content "\\begin{proof}" proofEnd then
       -- Find text after \leanok in the proof block
       if let some proofText := extractBetween proofBlock "\\leanok\n" "" then
-        artifact := { artifact with latexProof := some (stripUsesCommand proofText) }
+        artifact := { artifact with latexProof := some (convertLatexListsToHtml (stripUsesCommand proofText)) }
       else if let some proofText := extractBetween proofBlock "\\leanok" "" then
-        artifact := { artifact with latexProof := some (stripUsesCommand proofText) }
+        artifact := { artifact with latexProof := some (convertLatexListsToHtml (stripUsesCommand proofText)) }
       else
         -- No \leanok in proof, use whole proof block
-        artifact := { artifact with latexProof := some (stripUsesCommand proofBlock) }
+        artifact := { artifact with latexProof := some (convertLatexListsToHtml (stripUsesCommand proofBlock)) }
 
   return artifact
 
