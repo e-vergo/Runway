@@ -130,29 +130,40 @@ def loadDepGraphJson (dressedDir : FilePath) : IO (Option String) := do
 
 /-- Load and parse the blueprint.tex file to extract chapters -/
 def loadBlueprintChapters (config : Config) (allNodes : Array NodeInfo) : IO (Array ChapterInfo) := do
+  IO.println "[DEBUG] loadBlueprintChapters: Starting..."
   match config.blueprintTexPath with
-  | none => return #[]
+  | none =>
+    IO.println "[DEBUG] No blueprintTexPath configured, returning empty"
+    return #[]
   | some texPath =>
     let path : FilePath := texPath
+    IO.println s!"[DEBUG] blueprintTexPath = {texPath}"
     if !(← path.pathExists) then
       IO.eprintln s!"Warning: Blueprint tex file not found at {texPath}"
       return #[]
 
     IO.println s!"  - Loading blueprint structure from {texPath}"
+    IO.println "[DEBUG] Calling parseFile..."
     let (doc, errors) ← parseFile path
+    IO.println s!"[DEBUG] parseFile complete, {errors.size} errors"
 
     for err in errors do
       IO.eprintln s!"    LaTeX parse warning: {err}"
 
     -- Extract chapters from document
+    IO.println "[DEBUG] Extracting document body..."
     let docBody := match doc.root with
       | .document _ body => body
       | other => #[other]
+    IO.println s!"[DEBUG] docBody has {docBody.size} elements"
 
+    IO.println "[DEBUG] Extracting chapters..."
     let chapterExtracts := extractChapters docBody
+    IO.println s!"[DEBUG] Found {chapterExtracts.size} chapter extracts"
     IO.println s!"  - Found {chapterExtracts.size} chapters"
 
     -- Build a map of module name -> nodes for quick lookup
+    IO.println s!"[DEBUG] Building moduleToNodes map from {allNodes.size} nodes..."
     let moduleToNodes : HashMap Lean.Name (Array NodeInfo) := Id.run do
       let mut m : HashMap Lean.Name (Array NodeInfo) := {}
       for node in allNodes do
@@ -164,18 +175,25 @@ def loadBlueprintChapters (config : Config) (allNodes : Array NodeInfo) : IO (Ar
             let moduleName := moduleParts.foldl (fun acc p => acc ++ p) Lean.Name.anonymous
             m := m.insert moduleName (m.getD moduleName #[] |>.push node)
       return m
+    IO.println s!"[DEBUG] moduleToNodes map built: {moduleToNodes.size} modules"
 
     -- Build a map of node label -> NodeInfo for quick lookup
+    IO.println "[DEBUG] Building labelToNode map..."
     let labelToNode : HashMap String NodeInfo := Id.run do
       let mut m : HashMap String NodeInfo := {}
       for node in allNodes do
         m := m.insert node.label node
       return m
+    IO.println s!"[DEBUG] labelToNode map built: {labelToNode.size} labels"
 
     -- Convert chapter extracts to ChapterInfo
+    IO.println s!"[DEBUG] Converting {chapterExtracts.size} chapter extracts to ChapterInfo..."
     let mut chapters : Array ChapterInfo := #[]
+    let mut chapterIdx := 0
 
     for ce in chapterExtracts do
+      chapterIdx := chapterIdx + 1
+      IO.println s!"[DEBUG]   Processing chapter {chapterIdx}/{chapterExtracts.size}: {ce.title}"
       -- Extract module and node references from chapter body
       let moduleRefs := extractModuleRefs ce.body
       let nodeRefs := extractNodeRefs ce.body
@@ -201,10 +219,13 @@ def loadBlueprintChapters (config : Config) (allNodes : Array NodeInfo) : IO (Ar
         | none => pure ()
 
       -- Extract sections
+      IO.println s!"[DEBUG]     Extracting sections from chapter..."
       let sectionExtracts := extractSections ce.body
+      IO.println s!"[DEBUG]     Found {sectionExtracts.size} sections"
       let mut sectionInfos : Array SectionInfo := #[]
 
       for se in sectionExtracts do
+        IO.println s!"[DEBUG]       Processing section: {se.title}"
         -- Collect nodes for this section
         let sectionModuleRefs := extractModuleRefs se.body
         let sectionNodeRefs := extractNodeRefs se.body
@@ -225,7 +246,9 @@ def loadBlueprintChapters (config : Config) (allNodes : Array NodeInfo) : IO (Ar
           | none => pure ()
 
         -- Convert section body to HTML (excluding \inputleanmodule/\inputleannode which become placeholders)
+        IO.println s!"[DEBUG]       Converting section body to HTML..."
         let sectionHtmlResult := toHtml se.body
+        IO.println s!"[DEBUG]       Section HTML conversion complete"
 
         sectionInfos := sectionInfos.push {
           number := se.number
@@ -236,7 +259,9 @@ def loadBlueprintChapters (config : Config) (allNodes : Array NodeInfo) : IO (Ar
         }
 
       -- Convert chapter body to HTML
+      IO.println s!"[DEBUG]     Converting chapter body to HTML..."
       let chapterHtmlResult := toHtml ce.body
+      IO.println s!"[DEBUG]     Chapter HTML conversion complete"
 
       chapters := chapters.push {
         number := ce.number
@@ -248,6 +273,7 @@ def loadBlueprintChapters (config : Config) (allNodes : Array NodeInfo) : IO (Ar
         sections := sectionInfos
       }
 
+    IO.println s!"[DEBUG] loadBlueprintChapters: Complete, returning {chapters.size} chapters"
     return chapters
 
 /-- Assign display numbers to nodes based on their position in chapters/sections.
@@ -315,30 +341,50 @@ def parseStatusCounts (json : Lean.Json) : Option StatusCounts :=
 
 /-- Build a BlueprintSite from Dress artifacts -/
 def buildSiteFromArtifacts (config : Config) (dressedDir : FilePath) : IO BlueprintSite := do
+  IO.println "[DEBUG] buildSiteFromArtifacts: Starting..."
+  IO.println s!"[DEBUG] dressedDir = {dressedDir}"
+
   -- Load the enhanced manifest (contains stats and node metadata)
+  IO.println "[DEBUG] Loading enhanced manifest..."
   let manifest ← loadEnhancedManifest dressedDir
+  IO.println "[DEBUG] Enhanced manifest loaded"
   if manifest.hasStats then
     IO.println s!"  - Loaded enhanced manifest with precomputed stats"
 
   -- Parse precomputed stats from manifest if available
+  IO.println "[DEBUG] Parsing precomputed stats..."
   let precomputedStats := manifest.stats.bind parseStatusCounts
+  IO.println "[DEBUG] Precomputed stats parsed"
 
   -- Load the dependency graph
+  IO.println "[DEBUG] Loading dependency graph..."
   let depGraph ← loadDepGraph dressedDir
+  IO.println s!"[DEBUG] Dependency graph loaded: {depGraph.nodes.size} nodes, {depGraph.edges.size} edges"
 
   -- Load SVG for the graph (may be empty if not generated by Dress)
+  IO.println "[DEBUG] Loading dep graph SVG..."
   let depGraphSvg ← loadDepGraphSvg dressedDir
+  IO.println s!"[DEBUG] SVG loaded: {if depGraphSvg.isSome then "yes" else "no"}"
 
   -- Generate JSON from the graph we built (don't read from potentially empty file)
+  IO.println "[DEBUG] Generating dep graph JSON string..."
   let depGraphJson := some depGraph.toJsonString
+  IO.println "[DEBUG] JSON string generated"
 
   -- Load decl.tex artifacts (contains statement/proof HTML)
+  IO.println "[DEBUG] Loading declaration artifacts..."
   let declArtifacts ← loadDeclArtifacts dressedDir
+  IO.println s!"[DEBUG] Declaration artifacts loaded: {declArtifacts.size}"
   IO.println s!"  - Loaded {declArtifacts.size} declaration artifacts from .tex files"
 
   -- Convert graph nodes to NodeInfo, populating HTML from artifacts
+  IO.println s!"[DEBUG] Converting {depGraph.nodes.size} graph nodes to NodeInfo..."
   let mut nodes : Array NodeInfo := #[]
+  let mut nodeCount := 0
   for node in depGraph.nodes do
+    nodeCount := nodeCount + 1
+    if nodeCount % 10 == 0 then
+      IO.println s!"[DEBUG]   Processed {nodeCount}/{depGraph.nodes.size} nodes..."
     -- Normalize node.id: artifacts are keyed with hyphens (colon -> hyphen)
     let normalizedId := node.id.replace ":" "-"
     -- Look up artifact by normalized id
@@ -409,9 +455,12 @@ def buildSiteFromArtifacts (config : Config) (dressedDir : FilePath) : IO Bluepr
       misc := misc
     }
 
+  IO.println s!"[DEBUG] Finished converting graph nodes: {nodes.size} NodeInfo created"
+
   -- If no nodes from graph, build from artifacts directly
   let mut finalNodes := nodes
   if nodes.isEmpty && !declArtifacts.isEmpty then
+    IO.println s!"[DEBUG] No graph nodes, building from {declArtifacts.size} artifacts directly..."
     for (key, art) in declArtifacts.toArray do
       -- Extract Lean signature and proof body HTML separately for right column
       let signatureHtml := art.leanSignatureHtml.filter (·.isEmpty == false)
@@ -459,12 +508,19 @@ def buildSiteFromArtifacts (config : Config) (dressedDir : FilePath) : IO Bluepr
         misc := misc
       }
 
+  IO.println s!"[DEBUG] Final nodes count: {finalNodes.size}"
+
   -- Load chapters from blueprint.tex if configured
+  IO.println "[DEBUG] Loading blueprint chapters (LaTeX parsing)..."
   let chapters ← loadBlueprintChapters config finalNodes
+  IO.println s!"[DEBUG] Blueprint chapters loaded: {chapters.size} chapters"
 
   -- Assign display numbers to nodes based on chapter/section structure
+  IO.println "[DEBUG] Assigning display numbers..."
   let numberedNodes := assignDisplayNumbers finalNodes chapters
+  IO.println "[DEBUG] Display numbers assigned"
 
+  IO.println "[DEBUG] buildSiteFromArtifacts: Complete, returning BlueprintSite"
   return {
     config := config
     nodes := numberedNodes
@@ -479,33 +535,50 @@ def buildSiteFromArtifacts (config : Config) (dressedDir : FilePath) : IO Bluepr
 /-- Execute the build command -/
 def runBuild (cliConfig : CLIConfig) : IO UInt32 := do
   IO.println "Runway: Building HTML from Dress artifacts..."
+  IO.println s!"[DEBUG] runBuild: Starting..."
+  IO.println s!"[DEBUG] configPath = {cliConfig.configPath}"
+  IO.println s!"[DEBUG] buildDir = {cliConfig.buildDir}"
 
   -- Load configuration
+  IO.println "[DEBUG] Loading config..."
   let config ← loadConfig cliConfig.configPath
+  IO.println s!"[DEBUG] Config loaded. assetsDir = {config.assetsDir}"
+  IO.println s!"[DEBUG] blueprintTexPath = {config.blueprintTexPath.getD "none"}"
 
   -- Determine directories
   let dressedDir := cliConfig.buildDir / "dressed"
   let outputDir := cliConfig.outputDir.getD (cliConfig.buildDir / "runway")
+  IO.println s!"[DEBUG] dressedDir = {dressedDir}"
+  IO.println s!"[DEBUG] outputDir = {outputDir}"
 
   -- Check if dressed directory exists
   if !(← dressedDir.pathExists) then
     IO.eprintln s!"Error: Dressed artifacts not found at {dressedDir}"
     IO.eprintln "Run 'lake build' to generate Dress artifacts first."
     return 1
+  IO.println "[DEBUG] Dressed directory exists"
 
   -- Build the site
+  IO.println "[DEBUG] Calling buildSiteFromArtifacts..."
   let site ← buildSiteFromArtifacts config dressedDir
+  IO.println s!"[DEBUG] buildSiteFromArtifacts returned. nodes={site.nodes.size}, chapters={site.chapters.size}"
 
   -- Generate HTML output
+  IO.println "[DEBUG] Creating output directory..."
   IO.FS.createDirAll outputDir
+  IO.println "[DEBUG] Output directory created"
 
   -- Generate site - multi-page if chapters available, single-page otherwise
+  IO.println "[DEBUG] Generating site HTML..."
   if site.chapters.isEmpty then
+    IO.println "[DEBUG] Using single-page mode (no chapters)"
     -- Single-page mode (original behavior)
     generateSite defaultTheme site outputDir
   else
+    IO.println s!"[DEBUG] Using multi-page mode ({site.chapters.size} chapters)"
     -- Multi-page mode with chapter pages
     generateMultiPageSite defaultTheme site outputDir
+  IO.println "[DEBUG] Site HTML generation complete"
 
   -- Copy assets from config.assetsDir to output
   let assetsOutputDir := outputDir / "assets"
