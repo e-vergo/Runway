@@ -157,8 +157,8 @@ def extractArtifacts (json : Lean.Json) : Array DeclArtifact := Id.run do
 structure EnhancedManifest where
   /-- Status counts from the manifest -/
   stats : Option Lean.Json := none
-  /-- Key theorem IDs -/
-  keyTheorems : Array String := #[]
+  /-- Key declaration IDs -/
+  keyDeclarations : Array String := #[]
   /-- Messages for nodes -/
   messages : Array (String × String) := #[]  -- (id, message)
   /-- Priority items -/
@@ -190,9 +190,9 @@ def loadEnhancedManifest (dressedDir : System.FilePath) : IO EnhancedManifest :=
     -- Extract stats (keep as Json for flexible parsing)
     manifest := { manifest with stats := json.getObjVal? "stats" |>.toOption }
 
-    -- Extract key theorems
-    if let .ok arr := json.getObjValAs? (Array String) "keyTheorems" then
-      manifest := { manifest with keyTheorems := arr }
+    -- Extract key declarations
+    if let .ok arr := json.getObjValAs? (Array String) "keyDeclarations" then
+      manifest := { manifest with keyDeclarations := arr }
 
     -- Extract messages
     if let .ok messagesJson := json.getObjVal? "messages" then
@@ -265,9 +265,9 @@ def loadEnhancedManifest (dressedDir : System.FilePath) : IO EnhancedManifest :=
 def EnhancedManifest.hasStats (m : EnhancedManifest) : Bool :=
   m.stats.isSome
 
-/-- Get key theorem status for a node ID -/
-def EnhancedManifest.isKeyTheorem (m : EnhancedManifest) (nodeId : String) : Bool :=
-  m.keyTheorems.contains nodeId
+/-- Get key declaration status for a node ID -/
+def EnhancedManifest.isKeyDeclaration (m : EnhancedManifest) (nodeId : String) : Bool :=
+  m.keyDeclarations.contains nodeId
 
 /-- Get message for a node ID -/
 def EnhancedManifest.getMessage (m : EnhancedManifest) (nodeId : String) : Option String :=

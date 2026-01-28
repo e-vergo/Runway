@@ -7,6 +7,7 @@ import Std.Data.HashMap
 import Verso.Output.Html
 import Runway.Config
 import Runway.Site
+import Runway.Macros
 
 /-!
 # Dependency Graph Loading and Embedding
@@ -432,18 +433,9 @@ def fullPageGraph (svg : Option String) (json : Option String) (modalsHtml : Opt
     (_projectTitle : String) (chapters : Array ChapterInfo := #[]) (config : Option Config := none)
     (cssPath : String := "assets/blueprint.css") (jsPath : String := "assets/plastex.js")
     (versoJsPath : String := "assets/verso-code.js") : Html :=
-  let mathjaxConfig := .tag "script" #[] (Html.text false r#"
-    MathJax = {
-      tex: {
-        inlineMath: [['$', '$'], ['\\(', '\\)']],
-        displayMath: [['$$', '$$'], ['\\[', '\\]']],
-        processEscapes: true
-      },
-      options: {
-        skipHtmlTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code']
-      }
-    };
-  "#)
+  -- Use macros from config if available
+  let macrosJson := config.map (·.mathjaxMacrosJson) |>.getD ""
+  let mathjaxConfig := .tag "script" #[] (Html.text false (Macros.generateMathJaxConfig macrosJson))
 
   -- Render sidebar if chapters and config are provided
   let toRoot := ""  -- dep_graph.html is at root level

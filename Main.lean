@@ -6,6 +6,7 @@ import Runway
 import Runway.Paper
 import Runway.Latex.ToLatex
 import Runway.Pdf
+import Runway.Macros
 
 /-!
 # Runway CLI
@@ -109,7 +110,7 @@ def parseArgs (args : List String) : Except String CLIConfig := do
 
   return config
 
-/-- Load configuration from JSON file -/
+/-- Load configuration from JSON file and parse MathJax macros from blueprint.tex -/
 def loadConfig (path : FilePath) : IO Config := do
   IO.println s!"[DEBUG] loadConfig: checking if path exists: {path}"
   (← IO.getStdout).flush
@@ -122,10 +123,20 @@ def loadConfig (path : FilePath) : IO Config := do
     IO.println "[DEBUG] loadConfig: parsing JSON..."
     (← IO.getStdout).flush
     match Lean.Json.parse content >>= Lean.FromJson.fromJson? with
-    | .ok config =>
+    | .ok (config : Config) =>
       IO.println "[DEBUG] loadConfig: JSON parsed successfully"
       (← IO.getStdout).flush
-      return config
+      -- Load MathJax macros from blueprint.tex if available
+      let mathjaxMacrosJson ← match config.blueprintTexPath with
+        | some texPath =>
+          IO.println s!"[DEBUG] loadConfig: loading macros from {texPath}"
+          (← IO.getStdout).flush
+          let macrosJson ← Runway.Macros.loadAndFormatMacros texPath
+          if !macrosJson.isEmpty then
+            IO.println s!"[DEBUG] loadConfig: loaded MathJax macros"
+          pure macrosJson
+        | none => pure ""
+      return { config with mathjaxMacrosJson := mathjaxMacrosJson }
     | .error e => throw <| IO.userError s!"Failed to parse config: {e}"
   else
     throw <| IO.userError s!"ERROR: Config file not found at {path}. A config file with 'assetsDir' is required."
@@ -450,7 +461,7 @@ def buildSiteFromArtifacts (config : Config) (dressedDir : FilePath) : IO Bluepr
     let hoverData := artifact.bind (·.hoverData)
 
     -- Get node metadata from manifest (use original node.id for lookup)
-    let keyTheorem := manifest.isKeyTheorem node.id
+    let keyDeclaration := manifest.isKeyDeclaration node.id
     let message := manifest.getMessage node.id
     let priorityItem := manifest.getPriorityItem node.id
     let blocked := manifest.getBlocked node.id
@@ -493,7 +504,7 @@ def buildSiteFromArtifacts (config : Config) (dressedDir : FilePath) : IO Bluepr
       url := node.url.replace ":" "-"  -- Normalize URL anchor to match HTML id
       displayName := displayName
       -- Node metadata from manifest
-      keyTheorem := keyTheorem
+      keyDeclaration := keyDeclaration
       message := message
       priorityItem := priorityItem
       blocked := blocked
@@ -520,7 +531,7 @@ def buildSiteFromArtifacts (config : Config) (dressedDir : FilePath) : IO Bluepr
       let proofBodyHtml := art.leanProofBodyHtml.filter (·.isEmpty == false)
 
       -- Get node metadata from manifest
-      let keyTheorem := manifest.isKeyTheorem key
+      let keyDecl := manifest.isKeyDeclaration key
       let message := manifest.getMessage key
       let priorityItem := manifest.getPriorityItem key
       let blocked := manifest.getBlocked key
@@ -552,7 +563,7 @@ def buildSiteFromArtifacts (config : Config) (dressedDir : FilePath) : IO Bluepr
         url := s!"#node-{key}"
         displayName := displayName
         -- Node metadata from manifest
-        keyTheorem := keyTheorem
+        keyDeclaration := keyDecl
         message := message
         priorityItem := priorityItem
         blocked := blocked

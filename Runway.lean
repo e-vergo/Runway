@@ -18,6 +18,7 @@ import Runway.DocGen4
 import Runway.Doc
 import Runway.Assets
 import Runway.Paper
+import Runway.Macros
 
 /-!
 # Runway

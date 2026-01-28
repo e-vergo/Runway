@@ -42,6 +42,8 @@ structure Config where
   paperAbstract : Option String := none
   /-- Preferred PDF compiler (pdflatex, tectonic, xelatex, lualatex) -/
   pdfCompiler : Option String := none
+  /-- Pre-parsed MathJax macros JSON string (populated at runtime from blueprint.tex) -/
+  mathjaxMacrosJson : String := ""
   deriving Inhabited, Repr
 
 instance : ToJson Config where

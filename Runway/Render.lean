@@ -384,33 +384,33 @@ def renderProgress (site : BlueprintSite) : Html :=
       )
     )
 
-/-- Render Key Theorems panel (top-right) with mini side-by-side previews -/
-def renderKeyTheorems (site : BlueprintSite) : Html :=
-  let keyNodes := site.nodes.filter (·.keyTheorem)
-  divClass "stats-box key-theorems" (
-    divClass "stats-title" (Html.text true "Key Theorems") ++
+/-- Render Key Declarations panel (top-right) with mini side-by-side previews -/
+def renderKeyDeclarations (site : BlueprintSite) : Html :=
+  let keyNodes := site.nodes.filter (·.keyDeclaration)
+  divClass "stats-box key-declarations" (
+    divClass "stats-title" (Html.text true "Key Declarations") ++
     divClass "stats-separator" Html.empty ++
     if keyNodes.isEmpty then
-      divClass "stats-empty" (Html.text true "No key theorems marked")
+      divClass "stats-empty" (Html.text true "No key declarations marked")
     else
-      divClass "key-theorems-list" (
+      divClass "key-declarations-list" (
         .seq (keyNodes.map fun node =>
           let statusColor := node.status.toColor
-          divClass "key-theorem-item" (
+          divClass "key-declaration-item" (
             -- Status dot
             .tag "span" #[("class", "status-dot"), ("style", s!"background:{statusColor}")] Html.empty ++
             -- Clickable preview container
-            .tag "a" #[("href", node.url), ("class", "key-theorem-link")] (
-              divClass "key-theorem-preview" (
+            .tag "a" #[("href", node.url), ("class", "key-declaration-link")] (
+              divClass "key-declaration-preview" (
                 -- Left: LaTeX statement (collapsed, no toggle)
-                divClass "kt-latex" (
-                  spanClass "kt-env" (Html.text true node.envType.capitalize) ++
+                divClass "kd-latex" (
+                  spanClass "kd-env" (Html.text true node.envType.capitalize) ++
                   Html.text true " " ++
-                  spanClass "kt-label" (Html.text true (node.displayNumber.getD node.label)) ++
-                  divClass "kt-statement" (Html.text false node.statementHtml)
+                  spanClass "kd-label" (Html.text true (node.displayNumber.getD node.label)) ++
+                  divClass "kd-statement" (Html.text false node.statementHtml)
                 ) ++
                 -- Right: Lean signature with hover data (matches renderNode pattern)
-                divClass "kt-lean" (
+                divClass "kd-lean" (
                   match node.signatureHtml with
                   | some sig =>
                     let hoverAttr := match node.hoverData with
@@ -518,7 +518,7 @@ def renderDashboard (site : BlueprintSite) : Html :=
     -- Top row: Progress (fixed width) + Key Theorems (fills remaining space)
     divClass "dashboard-row top-row" (
       divClass "dashboard-cell progress-cell" (renderProgress site) ++
-      divClass "dashboard-cell key-theorems-cell" (renderKeyTheorems site)
+      divClass "dashboard-cell key-declarations-cell" (renderKeyDeclarations site)
     ) ++
     -- Bottom row: Project Notes spanning full width
     divClass "dashboard-row bottom-row" (

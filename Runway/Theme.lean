@@ -9,6 +9,7 @@ import Runway.Genre
 import Runway.Site
 import Runway.Render
 import Runway.DepGraph
+import Runway.Macros
 
 /-!
 # Blueprint Theme System
@@ -156,19 +157,8 @@ def primaryTemplate : Template := fun content => do
   let config ← Render.getConfig
   let toRoot ← Render.pathToRoot
 
-  -- MathJax configuration script
-  let mathjaxConfig := .tag "script" #[] (Html.text false r#"
-    MathJax = {
-      tex: {
-        inlineMath: [['$', '$'], ['\\(', '\\)']],
-        displayMath: [['$$', '$$'], ['\\[', '\\]']],
-        processEscapes: true
-      },
-      options: {
-        skipHtmlTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code']
-      }
-    };
-  "#)
+  -- MathJax configuration script (with macros from blueprint.tex)
+  let mathjaxConfig := .tag "script" #[] (Html.text false (Macros.generateMathJaxConfig config.mathjaxMacrosJson))
 
   return .tag "html" #[("lang", "en")] (
     .tag "head" #[] (
@@ -236,19 +226,8 @@ def primaryTemplateWithSidebar (chapters : Array ChapterInfo) (currentSlug : Opt
   let config ← Render.getConfig
   let toRoot ← Render.pathToRoot
 
-  -- MathJax configuration script
-  let mathjaxConfig := .tag "script" #[] (Html.text false r#"
-    MathJax = {
-      tex: {
-        inlineMath: [['$', '$'], ['\\(', '\\)']],
-        displayMath: [['$$', '$$'], ['\\[', '\\]']],
-        processEscapes: true
-      },
-      options: {
-        skipHtmlTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code']
-      }
-    };
-  "#)
+  -- MathJax configuration script (with macros from blueprint.tex)
+  let mathjaxConfig := .tag "script" #[] (Html.text false (Macros.generateMathJaxConfig config.mathjaxMacrosJson))
 
   -- Build sidebar
   let sidebar := renderSidebar chapters currentSlug toRoot config
@@ -325,19 +304,8 @@ def indexTemplate : IndexTemplate := renderIndex
 def renderPdfPage (chapters : Array ChapterInfo) (config : Config) : Html :=
   let toRoot := ""
 
-  -- MathJax configuration script (not really needed for PDF page but keeps consistency)
-  let mathjaxConfig := .tag "script" #[] (Html.text false r#"
-    MathJax = {
-      tex: {
-        inlineMath: [['$', '$'], ['\\(', '\\)']],
-        displayMath: [['$$', '$$'], ['\\[', '\\]']],
-        processEscapes: true
-      },
-      options: {
-        skipHtmlTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code']
-      }
-    };
-  "#)
+  -- MathJax configuration script (with macros from blueprint.tex for consistency)
+  let mathjaxConfig := .tag "script" #[] (Html.text false (Macros.generateMathJaxConfig config.mathjaxMacrosJson))
 
   -- Build sidebar
   let sidebar := renderSidebar chapters (some "pdf") toRoot config

@@ -7,6 +7,7 @@ import Runway.Config
 import Runway.Latex
 import Runway.Graph
 import Runway.Render
+import Runway.Macros
 import Verso.Output.Html
 import Std.Data.HashMap
 import Dress.Render
@@ -194,8 +195,7 @@ def renderPaperContent (config : Config) (content : Html) : Html :=
 
 /-- Full paper HTML page (standalone, deprecated - use renderPaperContent with sidebar template) -/
 def renderPaperPage (config : Config) (content : Html) : Html :=
-  let mathjaxConfig := .tag "script" #[] (Html.text false
-    "MathJax = { tex: { inlineMath: [['$', '$'], ['\\\\(', '\\\\)']], displayMath: [['$$', '$$'], ['\\\\[', '\\\\]']], processEscapes: true } };")
+  let mathjaxConfig := .tag "script" #[] (Html.text false (Macros.generateMathJaxConfig config.mathjaxMacrosJson))
   .tag "html" #[("lang", "en")] (
     .tag "head" #[] (
       .tag "meta" #[("charset", "UTF-8")] Html.empty ++
