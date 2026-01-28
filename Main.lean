@@ -483,7 +483,10 @@ def buildSiteFromArtifacts (config : Config) (dressedDir : FilePath) : IO Bluepr
       misc := misc
     }
 
+  IO.println "[DEBUG] Node loop completed, about to print size..."
+  (← IO.getStdout).flush
   IO.println s!"[DEBUG] Finished converting graph nodes: {nodes.size} NodeInfo created"
+  (← IO.getStdout).flush
 
   -- If no nodes from graph, build from artifacts directly
   let mut finalNodes := nodes
