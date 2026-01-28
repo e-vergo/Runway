@@ -568,12 +568,20 @@ def runBuild (cliConfig : CLIConfig) : IO UInt32 := do
   (← IO.getStdout).flush
 
   -- Determine directories
+  IO.println "[DEBUG] Creating dressedDir path..."
+  (← IO.getStdout).flush
   let dressedDir := cliConfig.buildDir / "dressed"
+  IO.println "[DEBUG] Creating outputDir path..."
+  (← IO.getStdout).flush
   let outputDir := cliConfig.outputDir.getD (cliConfig.buildDir / "runway")
   IO.println s!"[DEBUG] dressedDir = {dressedDir}"
+  (← IO.getStdout).flush
   IO.println s!"[DEBUG] outputDir = {outputDir}"
+  (← IO.getStdout).flush
 
   -- Check if dressed directory exists
+  IO.println "[DEBUG] Checking if dressed directory exists..."
+  (← IO.getStdout).flush
   if !(← dressedDir.pathExists) then
     IO.eprintln s!"Error: Dressed artifacts not found at {dressedDir}"
     IO.eprintln "Run 'lake build' to generate Dress artifacts first."
