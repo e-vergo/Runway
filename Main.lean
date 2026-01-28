@@ -119,7 +119,7 @@ def resolvePath (basePath : FilePath) (p : FilePath) : FilePath :=
 def resolvePathOpt (basePath : FilePath) (p : Option String) : Option String :=
   p.map fun s =>
     let fp : FilePath := s
-    if fp.isAbsolute then s
+    if fp.isAbsolute then fp.toString
     else (basePath / fp).toString
 
 /-- Load configuration from JSON file and parse MathJax macros from blueprint.tex -/
