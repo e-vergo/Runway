@@ -535,7 +535,9 @@ def buildSiteFromArtifacts (config : Config) (dressedDir : FilePath) : IO Bluepr
 /-- Execute the build command -/
 def runBuild (cliConfig : CLIConfig) : IO UInt32 := do
   IO.println "Runway: Building HTML from Dress artifacts..."
+  (← IO.getStdout).flush
   IO.println s!"[DEBUG] runBuild: Starting..."
+  (← IO.getStdout).flush
   IO.println s!"[DEBUG] configPath = {cliConfig.configPath}"
   IO.println s!"[DEBUG] buildDir = {cliConfig.buildDir}"
 
@@ -869,6 +871,8 @@ def main (args : List String) : IO UInt32 := do
     IO.eprintln "Run 'runway --help' for usage."
     return 1
   | .ok cliConfig =>
+    IO.println s!"[DEBUG] main: parseArgs succeeded, command = {cliConfig.command}"
+    (← IO.getStdout).flush
     if cliConfig.showHelp then
       Runway.CLI.showHelp
       return 0
