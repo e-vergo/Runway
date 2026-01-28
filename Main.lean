@@ -860,6 +860,9 @@ end Runway.CLI
 
 /-- Main entry point -/
 def main (args : List String) : IO UInt32 := do
+  IO.println "[DEBUG] main: Entry point reached"
+  IO.println s!"[DEBUG] main: args = {args}"
+  (← IO.getStdout).flush
   match Runway.CLI.parseArgs args with
   | .error msg =>
     IO.eprintln s!"Error: {msg}"
