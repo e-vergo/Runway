@@ -482,6 +482,9 @@ def buildSiteFromArtifacts (config : Config) (dressedDir : FilePath) : IO Bluepr
       technicalDebt := technicalDebt
       misc := misc
     }
+    if nodeCount == depGraph.nodes.size then
+      IO.println s!"[DEBUG] Final node ({nodeCount}) processed, exiting loop..."
+      (← IO.getStdout).flush
 
   IO.println "[DEBUG] Node loop completed, about to print size..."
   (← IO.getStdout).flush
