@@ -110,6 +110,18 @@ def parseArgs (args : List String) : Except String CLIConfig := do
 
   return config
 
+/-- Resolve a path relative to a base directory if it's not absolute -/
+def resolvePath (basePath : FilePath) (p : FilePath) : FilePath :=
+  if p.isAbsolute then p
+  else basePath / p
+
+/-- Resolve an optional path string relative to a base directory -/
+def resolvePathOpt (basePath : FilePath) (p : Option String) : Option String :=
+  p.map fun s =>
+    let fp : FilePath := s
+    if fp.isAbsolute then s
+    else (basePath / fp).toString
+
 /-- Load configuration from JSON file and parse MathJax macros from blueprint.tex -/
 def loadConfig (path : FilePath) : IO Config := do
   IO.println s!"[DEBUG] loadConfig: checking if path exists: {path}"
@@ -126,8 +138,22 @@ def loadConfig (path : FilePath) : IO Config := do
     | .ok (config : Config) =>
       IO.println "[DEBUG] loadConfig: JSON parsed successfully"
       (← IO.getStdout).flush
+
+      -- Resolve paths relative to config file's directory
+      let configDir := path.parent.getD "."
+      IO.println s!"[DEBUG] loadConfig: resolving paths relative to {configDir}"
+      let resolvedConfig : Config := {
+        config with
+        outputDir := resolvePath configDir config.outputDir
+        assetsDir := resolvePath configDir config.assetsDir
+        blueprintTexPath := resolvePathOpt configDir config.blueprintTexPath
+        paperTexPath := resolvePathOpt configDir config.paperTexPath
+      }
+      IO.println s!"[DEBUG] loadConfig: resolved assetsDir = {resolvedConfig.assetsDir}"
+      IO.println s!"[DEBUG] loadConfig: resolved blueprintTexPath = {resolvedConfig.blueprintTexPath.getD "none"}"
+
       -- Load MathJax macros from blueprint.tex if available
-      let mathjaxMacrosJson ← match config.blueprintTexPath with
+      let mathjaxMacrosJson ← match resolvedConfig.blueprintTexPath with
         | some texPath =>
           IO.println s!"[DEBUG] loadConfig: loading macros from {texPath}"
           (← IO.getStdout).flush
@@ -136,7 +162,7 @@ def loadConfig (path : FilePath) : IO Config := do
             IO.println s!"[DEBUG] loadConfig: loaded MathJax macros"
           pure macrosJson
         | none => pure ""
-      return { config with mathjaxMacrosJson := mathjaxMacrosJson }
+      return { resolvedConfig with mathjaxMacrosJson := mathjaxMacrosJson }
     | .error e => throw <| IO.userError s!"Failed to parse config: {e}"
   else
     throw <| IO.userError s!"ERROR: Config file not found at {path}. A config file with 'assetsDir' is required."
