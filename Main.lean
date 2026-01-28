@@ -142,39 +142,51 @@ def loadDepGraphJson (dressedDir : FilePath) : IO (Option String) := do
 /-- Load and parse the blueprint.tex file to extract chapters -/
 def loadBlueprintChapters (config : Config) (allNodes : Array NodeInfo) : IO (Array ChapterInfo) := do
   IO.println "[DEBUG] loadBlueprintChapters: Starting..."
+  (← IO.getStdout).flush
   match config.blueprintTexPath with
   | none =>
     IO.println "[DEBUG] No blueprintTexPath configured, returning empty"
+    (← IO.getStdout).flush
     return #[]
   | some texPath =>
     let path : FilePath := texPath
     IO.println s!"[DEBUG] blueprintTexPath = {texPath}"
+    (← IO.getStdout).flush
     if !(← path.pathExists) then
       IO.eprintln s!"Warning: Blueprint tex file not found at {texPath}"
       return #[]
 
     IO.println s!"  - Loading blueprint structure from {texPath}"
+    (← IO.getStdout).flush
     IO.println "[DEBUG] Calling parseFile..."
+    (← IO.getStdout).flush
     let (doc, errors) ← parseFile path
     IO.println s!"[DEBUG] parseFile complete, {errors.size} errors"
+    (← IO.getStdout).flush
 
     for err in errors do
       IO.eprintln s!"    LaTeX parse warning: {err}"
 
     -- Extract chapters from document
     IO.println "[DEBUG] Extracting document body..."
+    (← IO.getStdout).flush
     let docBody := match doc.root with
       | .document _ body => body
       | other => #[other]
     IO.println s!"[DEBUG] docBody has {docBody.size} elements"
+    (← IO.getStdout).flush
 
     IO.println "[DEBUG] Extracting chapters..."
+    (← IO.getStdout).flush
     let chapterExtracts := extractChapters docBody
     IO.println s!"[DEBUG] Found {chapterExtracts.size} chapter extracts"
+    (← IO.getStdout).flush
     IO.println s!"  - Found {chapterExtracts.size} chapters"
+    (← IO.getStdout).flush
 
     -- Build a map of module name -> nodes for quick lookup
     IO.println s!"[DEBUG] Building moduleToNodes map from {allNodes.size} nodes..."
+    (← IO.getStdout).flush
     let moduleToNodes : HashMap Lean.Name (Array NodeInfo) := Id.run do
       let mut m : HashMap Lean.Name (Array NodeInfo) := {}
       for node in allNodes do
@@ -543,11 +555,14 @@ def buildSiteFromArtifacts (config : Config) (dressedDir : FilePath) : IO Bluepr
       }
 
   IO.println s!"[DEBUG] Final nodes count: {finalNodes.size}"
+  (← IO.getStdout).flush
 
   -- Load chapters from blueprint.tex if configured
   IO.println "[DEBUG] Loading blueprint chapters (LaTeX parsing)..."
+  (← IO.getStdout).flush
   let chapters ← loadBlueprintChapters config finalNodes
   IO.println s!"[DEBUG] Blueprint chapters loaded: {chapters.size} chapters"
+  (← IO.getStdout).flush
 
   -- Assign display numbers to nodes based on chapter/section structure
   IO.println "[DEBUG] Assigning display numbers..."

@@ -522,8 +522,18 @@ def parse (source : String) : Document × Array String :=
 
 /-- Parse LaTeX file -/
 def parseFile (path : System.FilePath) : IO (Document × Array String) := do
+  IO.println s!"[DEBUG] parseFile: reading {path}"
+  (← IO.getStdout).flush
   let content ← IO.FS.readFile path
-  let (doc, errors) := parse content
-  return ({ doc with sourcePath := some path }, errors)
+  IO.println s!"[DEBUG] parseFile: read {content.length} chars, tokenizing..."
+  (← IO.getStdout).flush
+  let tokens := tokenize content
+  IO.println s!"[DEBUG] parseFile: got {tokens.size} tokens, parsing..."
+  (← IO.getStdout).flush
+  let state : ParserState := { tokens, pos := 0, errors := #[] }
+  let (doc, finalState) := Parser.parseDocument.run state
+  IO.println s!"[DEBUG] parseFile: parsing complete, {finalState.errors.size} errors"
+  (← IO.getStdout).flush
+  return ({ doc with sourcePath := some path }, finalState.errors)
 
 end Runway.Latex
