@@ -152,16 +152,31 @@ def loadConfig (path : FilePath) : IO Config := do
       IO.println s!"[DEBUG] loadConfig: resolved assetsDir = {resolvedConfig.assetsDir}"
       IO.println s!"[DEBUG] loadConfig: resolved blueprintTexPath = {resolvedConfig.blueprintTexPath.getD "none"}"
 
-      -- Load MathJax macros from blueprint.tex if available
-      let mathjaxMacrosJson ← match resolvedConfig.blueprintTexPath with
+      -- Load MathJax macros from both blueprint.tex and paper.tex
+      let blueprintMacros ← match resolvedConfig.blueprintTexPath with
         | some texPath =>
-          IO.println s!"[DEBUG] loadConfig: loading macros from {texPath}"
+          IO.println s!"[DEBUG] loadConfig: loading macros from blueprint {texPath}"
           (← IO.getStdout).flush
-          let macrosJson ← Runway.Macros.loadAndFormatMacros texPath
-          if !macrosJson.isEmpty then
-            IO.println s!"[DEBUG] loadConfig: loaded MathJax macros"
-          pure macrosJson
+          Runway.Macros.loadAndFormatMacros texPath
         | none => pure ""
+
+      let paperMacros ← match resolvedConfig.paperTexPath with
+        | some texPath =>
+          IO.println s!"[DEBUG] loadConfig: loading macros from paper {texPath}"
+          (← IO.getStdout).flush
+          Runway.Macros.loadAndFormatMacros texPath
+        | none => pure ""
+
+      -- Combine macros (paper macros added after blueprint, so they can override)
+      let mathjaxMacrosJson :=
+        if blueprintMacros.isEmpty && paperMacros.isEmpty then ""
+        else if blueprintMacros.isEmpty then paperMacros
+        else if paperMacros.isEmpty then blueprintMacros
+        else blueprintMacros ++ ", " ++ paperMacros
+
+      if !mathjaxMacrosJson.isEmpty then
+        IO.println s!"[DEBUG] loadConfig: loaded MathJax macros from tex files"
+
       return { resolvedConfig with mathjaxMacrosJson := mathjaxMacrosJson }
     | .error e => throw <| IO.userError s!"Failed to parse config: {e}"
   else
