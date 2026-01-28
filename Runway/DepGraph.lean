@@ -393,9 +393,14 @@ private def renderDepGraphSidebar (chapters : Array ChapterInfo) (toRoot : Strin
     .tag "a" #[("href", s!"{toRoot}dep_graph.html")] (Html.text true "Dependency Graph")
   )
 
-  -- Paper link
+  -- Paper link (web version)
   let paperItem := .tag "li" #[] (
-    .tag "a" #[("href", s!"{toRoot}paper.html")] (Html.text true "Paper")
+    .tag "a" #[("href", s!"{toRoot}paper.html")] (Html.text true "Paper [web]")
+  )
+
+  -- PDF link (PDF version)
+  let pdfItem := .tag "li" #[] (
+    .tag "a" #[("href", s!"{toRoot}pdf.html")] (Html.text true "Paper [pdf]")
   )
 
   -- External links (GitHub, API Docs)
@@ -416,7 +421,7 @@ private def renderDepGraphSidebar (chapters : Array ChapterInfo) (toRoot : Strin
 
   .tag "nav" #[("class", "toc")] (
     .tag "ul" #[("class", "sub-toc-0")] (
-      .seq #[homeItem] ++ .seq chapterItems ++ .seq #[separator, graphItem, paperItem, separator, githubItem, docsItem]
+      .seq #[homeItem] ++ .seq chapterItems ++ .seq #[separator, graphItem, paperItem, pdfItem, separator, githubItem, docsItem]
     ) ++
     themeToggle
   )

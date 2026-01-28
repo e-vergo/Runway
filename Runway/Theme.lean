@@ -89,16 +89,16 @@ def renderSidebar (chapters : Array ChapterInfo) (currentSlug : Option String) (
     .tag "a" #[("href", s!"{toRoot}dep_graph.html")] (Html.text true "Dependency Graph")
   )
 
-  -- Paper link
+  -- Paper link (web version)
   let paperClass := if currentSlug == some "paper" then "active" else ""
   let paperItem := .tag "li" #[("class", paperClass)] (
-    .tag "a" #[("href", s!"{toRoot}paper.html")] (Html.text true "Paper")
+    .tag "a" #[("href", s!"{toRoot}paper.html")] (Html.text true "Paper [web]")
   )
 
-  -- PDF link (shown when PDF page exists - indicated by currentSlug == some "pdf")
+  -- PDF link (PDF version)
   let pdfClass := if currentSlug == some "pdf" then "active" else ""
   let pdfItem := .tag "li" #[("class", pdfClass)] (
-    .tag "a" #[("href", s!"{toRoot}pdf.html")] (Html.text true "PDF")
+    .tag "a" #[("href", s!"{toRoot}pdf.html")] (Html.text true "Paper [pdf]")
   )
 
   -- External links (GitHub, API Docs)
