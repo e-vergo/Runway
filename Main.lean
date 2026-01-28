@@ -104,10 +104,21 @@ def parseArgs (args : List String) : Except String CLIConfig := do
 
 /-- Load configuration from JSON file -/
 def loadConfig (path : FilePath) : IO Config := do
+  IO.println s!"[DEBUG] loadConfig: checking if path exists: {path}"
+  (← IO.getStdout).flush
   if ← path.pathExists then
+    IO.println "[DEBUG] loadConfig: path exists, reading file..."
+    (← IO.getStdout).flush
     let content ← IO.FS.readFile path
+    IO.println s!"[DEBUG] loadConfig: file read, {content.length} bytes"
+    (← IO.getStdout).flush
+    IO.println "[DEBUG] loadConfig: parsing JSON..."
+    (← IO.getStdout).flush
     match Lean.Json.parse content >>= Lean.FromJson.fromJson? with
-    | .ok config => return config
+    | .ok config =>
+      IO.println "[DEBUG] loadConfig: JSON parsed successfully"
+      (← IO.getStdout).flush
+      return config
     | .error e => throw <| IO.userError s!"Failed to parse config: {e}"
   else
     throw <| IO.userError s!"ERROR: Config file not found at {path}. A config file with 'assetsDir' is required."
