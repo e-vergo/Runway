@@ -582,14 +582,19 @@ def runBuild (cliConfig : CLIConfig) : IO UInt32 := do
   -- Check if dressed directory exists
   IO.println "[DEBUG] Checking if dressed directory exists..."
   (← IO.getStdout).flush
-  if !(← dressedDir.pathExists) then
+  let dressedExists ← dressedDir.pathExists
+  IO.println s!"[DEBUG] pathExists returned: {dressedExists}"
+  (← IO.getStdout).flush
+  if !dressedExists then
     IO.eprintln s!"Error: Dressed artifacts not found at {dressedDir}"
     IO.eprintln "Run 'lake build' to generate Dress artifacts first."
     return 1
   IO.println "[DEBUG] Dressed directory exists"
+  (← IO.getStdout).flush
 
   -- Build the site
   IO.println "[DEBUG] Calling buildSiteFromArtifacts..."
+  (← IO.getStdout).flush
   let site ← buildSiteFromArtifacts config dressedDir
   IO.println s!"[DEBUG] buildSiteFromArtifacts returned. nodes={site.nodes.size}, chapters={site.chapters.size}"
 
