@@ -273,10 +273,6 @@ def EnhancedManifest.isKeyDeclaration (m : EnhancedManifest) (nodeId : String) :
 def EnhancedManifest.getMessage (m : EnhancedManifest) (nodeId : String) : Option String :=
   m.messages.find? (·.1 == nodeId) |>.map (·.2)
 
-/-- Get priority for a node ID (deprecated, use getPriorityItem) -/
-def EnhancedManifest.getPriority (m : EnhancedManifest) (nodeId : String) : Option String :=
-  m.priorityItems.find? (·.1 == nodeId) |>.map (·.2)
-
 /-- Check if a node is a priority item -/
 def EnhancedManifest.getPriorityItem (m : EnhancedManifest) (nodeId : String) : Bool :=
   m.priorityItems.any (·.1 == nodeId)

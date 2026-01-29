@@ -103,11 +103,6 @@ def PaperNodeInfoExt.toSbsData (info : PaperNodeInfoExt) (includeProof : Bool :=
   declNames := #[]  -- Paper doesn't track this
 }
 
-/-- Render the Lean column for side-by-side display
-    DEPRECATED: Use Dress.Render.renderSideBySide with .paper variant instead -/
-def renderLeanColumn (info : PaperNodeInfoExt) : Html :=
-  Html.text false (Dress.Render.renderLeanColumn info.toSbsData)
-
 /-- Render theorem environment (statement only) -/
 def renderStatement (info : PaperNodeInfo) : Html :=
   .tag "div" #[("class", s!"paper-theorem paper-{info.envType}"),
@@ -190,30 +185,6 @@ def renderPaperContent (config : Config) (content : Html) : Html :=
       Html.text true "Generated with " ++
       .tag "a" #[("href", "https://github.com/e-vergo/Side-By-Side-Blueprint")]
         (Html.text true "Side-by-Side Blueprint")
-    )
-  )
-
-/-- Full paper HTML page (standalone, deprecated - use renderPaperContent with sidebar template) -/
-def renderPaperPage (config : Config) (content : Html) : Html :=
-  let mathjaxConfig := .tag "script" #[] (Html.text false (Macros.generateMathJaxConfig config.mathjaxMacrosJson))
-  .tag "html" #[("lang", "en")] (
-    .tag "head" #[] (
-      .tag "meta" #[("charset", "UTF-8")] Html.empty ++
-      .tag "meta" #[("name", "viewport"), ("content", "width=device-width, initial-scale=1")] Html.empty ++
-      .tag "title" #[] (Html.text true (config.paperTitle.getD config.title)) ++
-      .tag "link" #[("rel", "stylesheet"), ("href", "assets/paper.css")] Html.empty ++
-      mathjaxConfig ++
-      .tag "script" #[("src", "https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"),
-                      ("async", "true")] Html.empty
-    ) ++
-    .tag "body" #[("class", "ar5iv-paper")] (
-      renderHeader config ++
-      .tag "main" #[("class", "paper-content")] content ++
-      .tag "footer" #[("class", "paper-footer")] (
-        Html.text true "Generated with " ++
-        .tag "a" #[("href", "https://github.com/e-vergo/Side-By-Side-Blueprint")]
-          (Html.text true "Side-by-Side Blueprint")
-      )
     )
   )
 
@@ -319,7 +290,7 @@ where
     return result
 
   /-- Convert \item entries within a list to <li> elements -/
-  convertItems (input : String) (htmlTag : String) : String := Id.run do
+  convertItems (input : String) (_htmlTag : String) : String := Id.run do
     let chars := input.toList
     let mut result := ""
     let mut i := 0
@@ -332,7 +303,7 @@ where
          chars[i]! == '<' && (
            (chars[i+1]! == 'u' && chars[i+2]! == 'l' && chars[i+3]! == '>') ||
            (chars[i+1]! == 'o' && chars[i+2]! == 'l' && chars[i+3]! == '>')) then
-        result := result ++ String.mk (chars.drop i |>.take 4)
+        result := result ++ String.ofList (chars.drop i |>.take 4)
         i := i + 4
         inList := true
       -- Check for </ul> or </ol> end
@@ -343,7 +314,7 @@ where
         if inListItem then
           result := result ++ "</li>"
           inListItem := false
-        result := result ++ String.mk (chars.drop i |>.take 5)
+        result := result ++ String.ofList (chars.drop i |>.take 5)
         i := i + 5
         inList := false
       -- Check for \item

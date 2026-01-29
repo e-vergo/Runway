@@ -399,8 +399,13 @@ def renderKeyDeclarations (site : BlueprintSite) : Html :=
           divClass "key-declaration-item" (
             -- Status dot
             .tag "span" #[("class", "status-dot"), ("style", s!"background:{statusColor}")] Html.empty ++
-            -- Clickable preview container
-            .tag "a" #[("href", node.url), ("class", "key-declaration-link")] (
+            -- Container with clickable title and selectable preview
+            divClass "key-declaration-link" (
+              -- Clickable title link
+              .tag "a" #[("href", node.url), ("class", "key-declaration-title-link")] (
+                Html.text true (node.displayName.getD node.label)
+              ) ++
+              -- Preview content (NOT wrapped in anchor - allows text selection)
               divClass "key-declaration-preview" (
                 -- Left: LaTeX statement (collapsed, no toggle)
                 divClass "kd-latex" (

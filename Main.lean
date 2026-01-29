@@ -124,24 +124,12 @@ def resolvePathOpt (basePath : FilePath) (p : Option String) : Option String :=
 
 /-- Load configuration from JSON file and parse MathJax macros from blueprint.tex -/
 def loadConfig (path : FilePath) : IO Config := do
-  IO.println s!"[DEBUG] loadConfig: checking if path exists: {path}"
-  (← IO.getStdout).flush
   if ← path.pathExists then
-    IO.println "[DEBUG] loadConfig: path exists, reading file..."
-    (← IO.getStdout).flush
     let content ← IO.FS.readFile path
-    IO.println s!"[DEBUG] loadConfig: file read, {content.length} bytes"
-    (← IO.getStdout).flush
-    IO.println "[DEBUG] loadConfig: parsing JSON..."
-    (← IO.getStdout).flush
     match Lean.Json.parse content >>= Lean.FromJson.fromJson? with
     | .ok (config : Config) =>
-      IO.println "[DEBUG] loadConfig: JSON parsed successfully"
-      (← IO.getStdout).flush
-
       -- Resolve paths relative to config file's directory
       let configDir := path.parent.getD "."
-      IO.println s!"[DEBUG] loadConfig: resolving paths relative to {configDir}"
       let resolvedConfig : Config := {
         config with
         outputDir := resolvePath configDir config.outputDir
@@ -149,22 +137,14 @@ def loadConfig (path : FilePath) : IO Config := do
         blueprintTexPath := resolvePathOpt configDir config.blueprintTexPath
         paperTexPath := resolvePathOpt configDir config.paperTexPath
       }
-      IO.println s!"[DEBUG] loadConfig: resolved assetsDir = {resolvedConfig.assetsDir}"
-      IO.println s!"[DEBUG] loadConfig: resolved blueprintTexPath = {resolvedConfig.blueprintTexPath.getD "none"}"
 
       -- Load MathJax macros from both blueprint.tex and paper.tex
       let blueprintMacros ← match resolvedConfig.blueprintTexPath with
-        | some texPath =>
-          IO.println s!"[DEBUG] loadConfig: loading macros from blueprint {texPath}"
-          (← IO.getStdout).flush
-          Runway.Macros.loadAndFormatMacros texPath
+        | some texPath => Runway.Macros.loadAndFormatMacros texPath
         | none => pure ""
 
       let paperMacros ← match resolvedConfig.paperTexPath with
-        | some texPath =>
-          IO.println s!"[DEBUG] loadConfig: loading macros from paper {texPath}"
-          (← IO.getStdout).flush
-          Runway.Macros.loadAndFormatMacros texPath
+        | some texPath => Runway.Macros.loadAndFormatMacros texPath
         | none => pure ""
 
       -- Combine macros (paper macros added after blueprint, so they can override)
@@ -173,9 +153,6 @@ def loadConfig (path : FilePath) : IO Config := do
         else if blueprintMacros.isEmpty then paperMacros
         else if paperMacros.isEmpty then blueprintMacros
         else blueprintMacros ++ ", " ++ paperMacros
-
-      if !mathjaxMacrosJson.isEmpty then
-        IO.println s!"[DEBUG] loadConfig: loaded MathJax macros from tex files"
 
       return { resolvedConfig with mathjaxMacrosJson := mathjaxMacrosJson }
     | .error e => throw <| IO.userError s!"Failed to parse config: {e}"

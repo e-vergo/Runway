@@ -105,17 +105,6 @@ def Graph.inEdges (g : Graph) (id : String) : Array Edge :=
 
 open Lean (Json toJson)
 
-instance : ToJson NodeStatus where
-  toJson s := match s with
-    | .notReady => "notReady"
-    | .stated => "stated"
-    | .ready => "ready"
-    | .sorry => "sorry"
-    | .proven => "proven"
-    | .fullyProven => "fullyProven"
-    | .mathlibReady => "mathlibReady"
-    | .inMathlib => "inMathlib"
-
 instance : ToJson Node where
   toJson n := Json.mkObj [
     ("id", n.id),
