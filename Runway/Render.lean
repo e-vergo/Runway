@@ -483,7 +483,7 @@ def renderProjectNotes (site : BlueprintSite) : Html :=
             .tag "ul" #[("class", "notes-list")] (
               .seq (messageNodes.map fun node =>
                 .tag "li" #[] (
-                  .tag "a" #[("href", node.url)] (Html.text true (node.title.getD node.label)) ++
+                  .tag "a" #[("href", node.fullUrl)] (Html.text true (node.title.getD node.label)) ++
                   divClass "note-content" (Html.text true (node.message.getD ""))
                 )
               )
@@ -509,7 +509,7 @@ where
           .seq (nodes.map fun node =>
             let text := getText node
             .tag "li" #[] (
-              .tag "a" #[("href", node.url)] (Html.text true (node.title.getD node.label)) ++
+              .tag "a" #[("href", node.fullUrl)] (Html.text true (node.title.getD node.label)) ++
               (if text.isEmpty then Html.empty else
                 spanClass "note-text" (Html.text true s!" — {text}"))
             )

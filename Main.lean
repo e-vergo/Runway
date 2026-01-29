@@ -335,6 +335,33 @@ def loadBlueprintChapters (config : Config) (allNodes : Array NodeInfo) : IO (Ar
     IO.println s!"[DEBUG] loadBlueprintChapters: Complete, returning {chapters.size} chapters"
     return chapters
 
+/-- Assign page paths to nodes based on which chapter they belong to.
+    Nodes in chapters get `pagePath := some "chapters/<slug>.html"`.
+    Nodes not in any chapter (or if no chapters exist) get `pagePath := none`. -/
+def assignPagePaths (nodes : Array NodeInfo) (chapters : Array ChapterInfo) : Array NodeInfo := Id.run do
+  -- Build a map from node label to chapter page path
+  let mut labelToPagePath : HashMap String String := {}
+
+  for chapter in chapters do
+    let chapterPagePath := s!"chapters/{chapter.slug}.html"
+
+    -- All nodes in chapter.nodeLabels belong to this chapter page
+    for nodeLabel in chapter.nodeLabels do
+      if !labelToPagePath.contains nodeLabel then
+        labelToPagePath := labelToPagePath.insert nodeLabel chapterPagePath
+
+    -- Also include nodes from sections (which are part of the chapter)
+    for sec in chapter.sections do
+      for nodeLabel in sec.nodeLabels do
+        if !labelToPagePath.contains nodeLabel then
+          labelToPagePath := labelToPagePath.insert nodeLabel chapterPagePath
+
+  -- Apply page paths to nodes
+  return nodes.map fun node =>
+    match labelToPagePath.get? node.label with
+    | some path => { node with pagePath := some path }
+    | none => node
+
 /-- Assign display numbers to nodes based on their position in chapters/sections.
     Format: ChapterNum.SectionNum.ItemNum (e.g., "4.1.1", "4.1.2", "4.2.1")
     If a node appears in chapter prose (not in a section), uses ChapterNum.ItemNum.
@@ -597,9 +624,14 @@ def buildSiteFromArtifacts (config : Config) (dressedDir : FilePath) : IO Bluepr
   IO.println s!"[DEBUG] Blueprint chapters loaded: {chapters.size} chapters"
   (← IO.getStdout).flush
 
+  -- Assign page paths to nodes based on which chapter they belong to
+  IO.println "[DEBUG] Assigning page paths..."
+  let nodesWithPaths := assignPagePaths finalNodes chapters
+  IO.println "[DEBUG] Page paths assigned"
+
   -- Assign display numbers to nodes based on chapter/section structure
   IO.println "[DEBUG] Assigning display numbers..."
-  let numberedNodes := assignDisplayNumbers finalNodes chapters
+  let numberedNodes := assignDisplayNumbers nodesWithPaths chapters
   IO.println "[DEBUG] Display numbers assigned"
 
   IO.println "[DEBUG] buildSiteFromArtifacts: Complete, returning BlueprintSite"

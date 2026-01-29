@@ -354,7 +354,7 @@ def toPaperNodeInfo (node : NodeInfo) (baseUrl : String := "") : PaperNodeInfo :
     statement := latexToHtml node.statementHtml
     proof := node.proofHtml.map latexToHtml
     status := nodeStatusToVerificationLevel node.status
-    blueprintUrl := some (baseUrl ++ "index.html#node-" ++ node.label)
+    blueprintUrl := some (baseUrl ++ node.fullUrl)
   }
 
 /-- Build a PaperNodeInfoExt from a NodeInfo (includes Lean code fields) -/
@@ -365,7 +365,7 @@ def toPaperNodeInfoExt (node : NodeInfo) (baseUrl : String := "") : PaperNodeInf
     statement := latexToHtml node.statementHtml
     proof := node.proofHtml.map latexToHtml
     status := nodeStatusToVerificationLevel node.status
-    blueprintUrl := some (baseUrl ++ "index.html#" ++ node.label)
+    blueprintUrl := some (baseUrl ++ node.fullUrl)
     signatureHtml := node.signatureHtml
     proofBodyHtml := node.proofBodyHtml
     hoverData := node.hoverData

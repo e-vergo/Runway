@@ -119,8 +119,10 @@ structure NodeInfo where
   declNames : Array Name
   /-- Labels of nodes this node depends on -/
   uses : Array String
-  /-- URL to this node's section in the HTML -/
+  /-- URL to this node's section in the HTML (anchor ID like "#thm-main") -/
   url : String
+  /-- Relative path to the page containing this node (e.g., "chapters/chapter-2.html"), none for index page -/
+  pagePath : Option String := none
   /-- Display number in chapter.section.item format (e.g., "4.1.1") -/
   displayNumber : Option String := none
   /-- Whether this is a key declaration for dashboard highlighting -/
@@ -161,6 +163,7 @@ instance : ToJson NodeInfo where
     ("declNames", .arr (n.declNames.map fun name => .str name.toString)),
     ("uses", .arr (n.uses.map .str)),
     ("url", .str n.url),
+    ("pagePath", match n.pagePath with | some p => .str p | none => .null),
     ("displayNumber", match n.displayNumber with | some d => .str d | none => .null),
     ("keyDeclaration", .bool n.keyDeclaration),
     ("message", match n.message with | some m => .str m | none => .null),
@@ -196,6 +199,7 @@ instance : FromJson NodeInfo where
     let declNames := declNamesJson.map (·.toName)
     let uses ← j.getObjValAs? (Array String) "uses" <|> pure #[]
     let url ← j.getObjValAs? String "url" <|> pure ""
+    let pagePath := (j.getObjValAs? String "pagePath").toOption
     let displayNumber := (j.getObjValAs? String "displayNumber").toOption
     let keyDeclaration := (j.getObjValAs? Bool "keyDeclaration").toOption.getD false
     let message := (j.getObjValAs? String "message").toOption
@@ -204,7 +208,19 @@ instance : FromJson NodeInfo where
     let potentialIssue := (j.getObjValAs? String "potentialIssue").toOption
     let technicalDebt := (j.getObjValAs? String "technicalDebt").toOption
     let misc := (j.getObjValAs? String "misc").toOption
-    return { label, title, envType, status, statementHtml, proofHtml, signatureHtml, proofBodyHtml, hoverData, declNames, uses, url, displayNumber, keyDeclaration, message, priorityItem, blocked, potentialIssue, technicalDebt, misc }
+    return { label, title, envType, status, statementHtml, proofHtml, signatureHtml, proofBodyHtml, hoverData, declNames, uses, url, pagePath, displayNumber, keyDeclaration, message, priorityItem, blocked, potentialIssue, technicalDebt, misc }
+
+namespace NodeInfo
+
+/-- Compute the full URL to this node.
+    For nodes on chapter pages, returns the chapter path with anchor.
+    For nodes not on any chapter page, links to dependency graph where they appear in modals. -/
+def fullUrl (self : NodeInfo) : String :=
+  match self.pagePath with
+  | some path => path ++ self.url  -- e.g., "chapters/chapter-2.html#thm-main"
+  | none => "dep_graph.html" ++ self.url  -- e.g., "dep_graph.html#thm-main" (node modal)
+
+end NodeInfo
 
 /-- A page in the blueprint site -/
 structure SitePage where
