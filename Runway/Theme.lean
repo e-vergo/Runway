@@ -475,16 +475,27 @@ def buildNodeLookup (nodes : Array NodeInfo) : Std.HashMap String NodeInfo :=
 
 /-- Build a lookup map from module name to nodes in that module.
     Module name is derived from declaration names (e.g., `PrimeNumberTheoremAnd.Wiener` from
-    `PrimeNumberTheoremAnd.Wiener.MainTheorem`). -/
-def buildModuleLookup (nodes : Array NodeInfo) : Std.HashMap String (Array NodeInfo) :=
+    `PrimeNumberTheoremAnd.Wiener.MainTheorem`).
+
+    Registers each node under BOTH:
+    - Short module name: `Wiener`
+    - Full module name: `PrimeNumberTheoremAnd.Wiener`
+
+    This allows `\inputleanmodule{PrimeNumberTheoremAnd.Wiener}` to match nodes whose
+    declaration names are stored as `Wiener.MainTheorem` (without project prefix). -/
+def buildModuleLookup (projectName : String) (nodes : Array NodeInfo) : Std.HashMap String (Array NodeInfo) :=
   nodes.foldl (init := {}) fun acc node =>
     node.declNames.foldl (init := acc) fun acc' declName =>
       let parts := declName.components
       if parts.length > 1 then
         let moduleParts := parts.dropLast
         let moduleName := moduleParts.foldl (fun a p => a ++ p) Lean.Name.anonymous
-        let moduleStr := moduleName.toString
-        acc'.insert moduleStr (acc'.getD moduleStr #[] |>.push node)
+        let shortModuleStr := moduleName.toString
+        -- Register under short module name
+        let acc'' := acc'.insert shortModuleStr (acc'.getD shortModuleStr #[] |>.push node)
+        -- Also register under full module name (projectName.shortModule)
+        let fullModuleStr := projectName ++ "." ++ shortModuleStr
+        acc''.insert fullModuleStr (acc''.getD fullModuleStr #[] |>.push node)
       else
         acc'
 
@@ -597,9 +608,11 @@ def replacePlaceholders (proseHtml : String) (nodeLookup : Std.HashMap String No
 
 /-- Render a chapter page content -/
 def renderChapterContent (chapter : ChapterInfo) (allNodes : Array NodeInfo) : RenderM Html := do
+  -- Get config for project name
+  let config ← Render.getConfig
   -- Build lookups for placeholder resolution
   let nodeLookup := buildNodeLookup allNodes
-  let moduleLookup := buildModuleLookup allNodes
+  let moduleLookup := buildModuleLookup config.projectName allNodes
 
   -- Chapter title
   let titlePrefix := if chapter.isAppendix then "Appendix" else s!"Chapter {chapter.number}"
