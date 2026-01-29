@@ -641,6 +641,8 @@ def runBuild (cliConfig : CLIConfig) : IO UInt32 := do
   (← IO.getStdout).flush
   IO.println s!"[DEBUG] blueprintTexPath = {config.blueprintTexPath.getD "none"}"
   (← IO.getStdout).flush
+  IO.println s!"[DEBUG] paperTexPath = {config.paperTexPath.getD "none"}"
+  (← IO.getStdout).flush
 
   -- Determine directories
   IO.println "[DEBUG] Creating dressedDir path..."
@@ -751,7 +753,8 @@ def runBuild (cliConfig : CLIConfig) : IO UInt32 := do
   -- Generate paper.html and PDF if paperTexPath is configured
   let mut pdfGenerated := false
   match config.paperTexPath with
-  | none => pure ()
+  | none =>
+    IO.println "[DEBUG] paperTexPath not configured in runway.json, skipping paper generation"
   | some texPathStr =>
     let texPath : FilePath := texPathStr
     if ← texPath.pathExists then
