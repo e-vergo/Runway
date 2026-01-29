@@ -153,6 +153,34 @@ def extractArtifacts (json : Lean.Json) : Array DeclArtifact := Id.run do
   | _ => pure ()
   return artifacts
 
+/-- Results of graph validation checks -/
+structure CheckResults where
+  /-- Whether the graph is fully connected (single component) -/
+  isConnected : Bool
+  /-- Number of connected components -/
+  numComponents : Nat
+  /-- Size of each connected component -/
+  componentSizes : Array Nat
+  /-- Detected cycles in the graph (each cycle = array of node IDs) -/
+  cycles : Array (Array String)
+  deriving Repr, Inhabited
+
+instance : Lean.FromJson CheckResults where
+  fromJson? j := do
+    let isConnected ← j.getObjValAs? Bool "isConnected"
+    let numComponents ← j.getObjValAs? Nat "numComponents"
+    let componentSizes ← j.getObjValAs? (Array Nat) "componentSizes"
+    let cycles ← j.getObjValAs? (Array (Array String)) "cycles"
+    return { isConnected, numComponents, componentSizes, cycles }
+
+instance : Lean.ToJson CheckResults where
+  toJson cr := .mkObj [
+    ("isConnected", .bool cr.isConnected),
+    ("numComponents", .num cr.numComponents),
+    ("componentSizes", Lean.ToJson.toJson cr.componentSizes),
+    ("cycles", Lean.ToJson.toJson cr.cycles)
+  ]
+
 /-- Enhanced manifest data with stats and dashboard metadata -/
 structure EnhancedManifest where
   /-- Status counts from the manifest -/
@@ -173,6 +201,8 @@ structure EnhancedManifest where
   miscItems : Array (String × String) := #[]  -- (id, note)
   /-- Node id to url mapping -/
   nodeUrls : Std.HashMap String String := {}
+  /-- Graph validation check results -/
+  checks : Option CheckResults := none
   deriving Inhabited
 
 /-- Load and parse the enhanced manifest.json -/
@@ -258,6 +288,12 @@ def loadEnhancedManifest (dressedDir : System.FilePath) : IO EnhancedManifest :=
           if let .str url := urlJson then
             nodeUrls := nodeUrls.insert id url
         manifest := { manifest with nodeUrls := nodeUrls }
+
+    -- Extract checks
+    let checks : Option CheckResults := match json.getObjVal? "checks" with
+      | .ok checksJson => Lean.FromJson.fromJson? checksJson |>.toOption
+      | .error _ => none
+    manifest := { manifest with checks := checks }
 
     return manifest
 

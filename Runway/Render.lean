@@ -517,12 +517,64 @@ where
         )
       )
 
+/-- Render the Checks tile showing graph validation results -/
+def renderChecks (site : BlueprintSite) : Html :=
+  let checks := site.checks.getD {
+    isConnected := true
+    numComponents := 1
+    componentSizes := #[0]
+    cycles := #[]
+  }
+
+  -- Connectedness check
+  let connectednessClass := if checks.isConnected then "check-pass" else "check-fail"
+  let connectednessIcon := if checks.isConnected then "✓" else "✗"
+  let connectednessText := if checks.isConnected
+    then "Graph is connected"
+    else s!"Graph has {checks.numComponents} disconnected components"
+
+  -- Cycles check
+  let cyclesClass := if checks.cycles.isEmpty then "check-pass" else "check-fail"
+  let cyclesIcon := if checks.cycles.isEmpty then "✓" else "✗"
+  let cyclesText := if checks.cycles.isEmpty
+    then "No circular dependencies"
+    else s!"{checks.cycles.size} cycle(s) detected"
+
+  -- Render the tile
+  divClass "stats-box checks-tile" (
+    divClass "stats-title" (Html.text true "Graph Checks") ++
+    divClass "stats-separator" Html.empty ++
+    divClass "checks-list" (
+      divClass s!"check-item {connectednessClass}" (
+        spanClass "check-icon" (Html.text true connectednessIcon) ++
+        spanClass "check-text" (Html.text true connectednessText)
+      ) ++
+      divClass s!"check-item {cyclesClass}" (
+        spanClass "check-icon" (Html.text true cyclesIcon) ++
+        spanClass "check-text" (Html.text true cyclesText)
+      ) ++
+      -- If there are cycles, list them
+      (if checks.cycles.isEmpty then Html.text true ""
+       else divClass "cycles-detail" (
+         .tag "ul" #[] (
+           checks.cycles.foldl (fun acc cycle =>
+             acc ++ .tag "li" #[] (Html.text true (", ".intercalate cycle.toList))
+           ) (Html.text true "")
+         )
+       ))
+    )
+  )
+
 /-- Render the dashboard grid -/
 def renderDashboard (site : BlueprintSite) : Html :=
   divClass "dashboard-grid" (
     -- Top row: Progress (fixed width) + Key Theorems (fills remaining space)
     divClass "dashboard-row top-row" (
-      divClass "dashboard-cell progress-cell" (renderProgress site) ++
+      -- Left column: Progress + Checks stacked vertically
+      divClass "dashboard-cell progress-cell" (
+        renderProgress site ++
+        renderChecks site
+      ) ++
       divClass "dashboard-cell key-declarations-cell" (renderKeyDeclarations site)
     ) ++
     -- Bottom row: Project Notes spanning full width

@@ -6,6 +6,7 @@ import Lean
 import Verso.Doc
 import Runway.Config
 import Runway.Genre
+import Runway.Dress.Load
 
 /-!
 # Site Structure Types
@@ -280,6 +281,8 @@ structure BlueprintSite where
   chapters : Array ChapterInfo := #[]
   /-- Precomputed status counts from manifest -/
   precomputedStats : Option StatusCounts := none
+  /-- Graph validation check results from manifest -/
+  checks : Option Dress.CheckResults := none
   deriving Inhabited
 
 namespace BlueprintSite
@@ -351,6 +354,8 @@ structure SiteBuilder where
   chapters : Array ChapterInfo := #[]
   /-- Precomputed status counts from manifest -/
   precomputedStats : Option StatusCounts := none
+  /-- Graph validation check results from manifest -/
+  checks : Option Dress.CheckResults := none
   deriving Inhabited
 
 namespace SiteBuilder
@@ -395,6 +400,10 @@ def addChapter (builder : SiteBuilder) (chapter : ChapterInfo) : SiteBuilder :=
 def setPrecomputedStats (builder : SiteBuilder) (stats : Option StatusCounts) : SiteBuilder :=
   { builder with precomputedStats := stats }
 
+/-- Set graph validation check results -/
+def setChecks (builder : SiteBuilder) (checks : Option Dress.CheckResults) : SiteBuilder :=
+  { builder with checks := checks }
+
 /-- Build the final site -/
 def build (builder : SiteBuilder) : BlueprintSite :=
   { config := builder.config
@@ -404,7 +413,8 @@ def build (builder : SiteBuilder) : BlueprintSite :=
     depGraphSvg := builder.depGraphSvg
     depGraphJson := builder.depGraphJson
     chapters := builder.chapters
-    precomputedStats := builder.precomputedStats }
+    precomputedStats := builder.precomputedStats
+    checks := builder.checks }
 
 end SiteBuilder
 
