@@ -561,7 +561,19 @@ def renderChecks (site : BlueprintSite) : Html :=
              acc ++ .tag "li" #[] (Html.text true (", ".intercalate cycle.toList))
            ) (Html.text true "")
          )
-       ))
+       )) ++
+      -- Placeholder: Kernel Verification
+      divClass "check-item check-pending" (
+        spanClass "check-icon" (Html.text true "○") ++
+        spanClass "check-text" (Html.text true "Kernel Verification") ++
+        spanClass "check-status" (Html.text true "Not implemented")
+      ) ++
+      -- Placeholder: Soundness Checks
+      divClass "check-item check-pending" (
+        spanClass "check-icon" (Html.text true "○") ++
+        spanClass "check-text" (Html.text true "Soundness Checks") ++
+        spanClass "check-status" (Html.text true "Not implemented")
+      )
     )
   )
 
