@@ -615,6 +615,7 @@ def buildSiteFromArtifacts (config : Config) (dressedDir : FilePath) : IO Bluepr
     depGraphJson := depGraphJson
     chapters := chapters
     precomputedStats := precomputedStats
+    checks := manifest.checks
   }
 
 /-- Execute the build command -/
