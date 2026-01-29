@@ -542,7 +542,7 @@ def renderChecks (site : BlueprintSite) : Html :=
 
   -- Render the tile
   divClass "stats-box checks-tile" (
-    divClass "stats-title" (Html.text true "Graph Checks") ++
+    divClass "stats-title" (Html.text true "Checks") ++
     divClass "stats-separator" Html.empty ++
     divClass "checks-list" (
       divClass s!"check-item {connectednessClass}" (
