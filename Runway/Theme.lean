@@ -473,11 +473,77 @@ def buildNodeLookup (nodes : Array NodeInfo) : Std.HashMap String NodeInfo :=
   nodes.foldl (init := {}) fun acc node =>
     acc.insert node.label node
 
-/-- Replace placeholder divs with rendered node HTML.
+/-- Build a lookup map from module name to nodes in that module.
+    Module name is derived from declaration names (e.g., `PrimeNumberTheoremAnd.Wiener` from
+    `PrimeNumberTheoremAnd.Wiener.MainTheorem`). -/
+def buildModuleLookup (nodes : Array NodeInfo) : Std.HashMap String (Array NodeInfo) :=
+  nodes.foldl (init := {}) fun acc node =>
+    node.declNames.foldl (init := acc) fun acc' declName =>
+      let parts := declName.components
+      if parts.length > 1 then
+        let moduleParts := parts.dropLast
+        let moduleName := moduleParts.foldl (fun a p => a ++ p) Lean.Name.anonymous
+        let moduleStr := moduleName.toString
+        acc'.insert moduleStr (acc'.getD moduleStr #[] |>.push node)
+      else
+        acc'
+
+/-- Replace module placeholder divs with rendered nodes from that module.
+    Finds `<div class="lean-module-placeholder" data-module="X"></div>` and replaces with
+    all rendered nodes from module X. -/
+def replaceModulePlaceholders (proseHtml : String)
+    (moduleLookup : Std.HashMap String (Array NodeInfo)) : RenderM String := do
+  let placeholderPrefix := "<div class=\"lean-module-placeholder\" data-module=\""
+
+  -- Split by the placeholder prefix
+  let parts := proseHtml.splitOn placeholderPrefix
+
+  -- First part is always before any placeholder
+  if parts.isEmpty then return proseHtml
+
+  let mut result := parts[0]!
+  let mut renderedLabels : Std.HashSet String := {}  -- Track rendered nodes to avoid duplicates
+
+  -- Process remaining parts (each starts with: ModuleName"></div>rest...)
+  for i in [1:parts.length] do
+    let part := parts[i]!
+    -- Find the closing quote to extract the module name
+    match part.splitOn "\"" with
+    | moduleName :: rest =>
+      -- rest[0] should be "></div>" and rest[1..] is the content after
+      let afterModule := "\"".intercalate rest
+      -- Check if it starts with the expected closing
+      if afterModule.startsWith "></div>" then
+        let afterPlaceholder := afterModule.drop "></div>".length
+        -- Look up nodes for this module
+        match moduleLookup[moduleName]? with
+        | some moduleNodes =>
+          -- Render each node from the module (deduplicated)
+          let mut nodesHtml := ""
+          for node in moduleNodes do
+            if !renderedLabels.contains node.label then
+              renderedLabels := renderedLabels.insert node.label
+              let nodeHtml ← renderNode node
+              nodesHtml := nodesHtml ++ nodeHtml.asString
+          result := result ++ nodesHtml ++ afterPlaceholder
+        | none =>
+          -- Module not found, insert warning
+          let warningHtml := s!"<div class=\"module-not-found\">Module '{moduleName}' not found or has no nodes</div>"
+          result := result ++ warningHtml ++ afterPlaceholder
+      else
+        -- Malformed placeholder, preserve original
+        result := result ++ placeholderPrefix ++ part
+    | [] =>
+      -- Malformed, preserve original
+      result := result ++ placeholderPrefix ++ part
+
+  return result
+
+/-- Replace node placeholder divs with rendered node HTML.
     Finds `<div class="lean-node-placeholder" data-node="X"></div>` and replaces with rendered node.
     Uses splitOn for reliable parsing.
 -/
-def replacePlaceholders (proseHtml : String) (nodeLookup : Std.HashMap String NodeInfo)
+def replaceNodePlaceholders (proseHtml : String) (nodeLookup : Std.HashMap String NodeInfo)
     : RenderM String := do
   let placeholderPrefix := "<div class=\"lean-node-placeholder\" data-node=\""
 
@@ -520,10 +586,20 @@ def replacePlaceholders (proseHtml : String) (nodeLookup : Std.HashMap String No
 
   return result
 
+/-- Replace all placeholder divs (both module and node placeholders) with rendered content.
+    First expands module placeholders, then node placeholders. -/
+def replacePlaceholders (proseHtml : String) (nodeLookup : Std.HashMap String NodeInfo)
+    (moduleLookup : Std.HashMap String (Array NodeInfo)) : RenderM String := do
+  -- First replace module placeholders (which expand to multiple nodes)
+  let afterModules ← replaceModulePlaceholders proseHtml moduleLookup
+  -- Then replace individual node placeholders
+  replaceNodePlaceholders afterModules nodeLookup
+
 /-- Render a chapter page content -/
 def renderChapterContent (chapter : ChapterInfo) (allNodes : Array NodeInfo) : RenderM Html := do
-  -- Build node lookup for placeholder resolution
+  -- Build lookups for placeholder resolution
   let nodeLookup := buildNodeLookup allNodes
+  let moduleLookup := buildModuleLookup allNodes
 
   -- Chapter title
   let titlePrefix := if chapter.isAppendix then "Appendix" else s!"Chapter {chapter.number}"
@@ -532,7 +608,7 @@ def renderChapterContent (chapter : ChapterInfo) (allNodes : Array NodeInfo) : R
   )
 
   -- Prose content with placeholders resolved to actual rendered nodes
-  let resolvedProseHtml ← replacePlaceholders chapter.proseHtml nodeLookup
+  let resolvedProseHtml ← replacePlaceholders chapter.proseHtml nodeLookup moduleLookup
   let proseHtml := Html.text false resolvedProseHtml
 
   -- Render sections
@@ -543,7 +619,7 @@ def renderChapterContent (chapter : ChapterInfo) (allNodes : Array NodeInfo) : R
       | none => .tag "h2" #[("class", "section-title")] (Html.text true sec.title)
 
     -- Section prose with placeholders resolved
-    let resolvedSectionProseHtml ← replacePlaceholders sec.proseHtml nodeLookup
+    let resolvedSectionProseHtml ← replacePlaceholders sec.proseHtml nodeLookup moduleLookup
     let sectionProseHtml := Html.text false resolvedSectionProseHtml
 
     sectionHtmls := sectionHtmls.push (
