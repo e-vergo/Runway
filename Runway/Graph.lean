@@ -67,6 +67,8 @@ structure Node where
   url : String
   /-- Associated Lean declaration names -/
   leanDecls : Array Name
+  /-- Module name containing this node (e.g., "PrimeNumberTheoremAnd.Wiener") -/
+  moduleName : String := ""
   deriving Repr, Inhabited
 
 /-- An edge in the dependency graph -/
@@ -112,7 +114,8 @@ instance : ToJson Node where
     ("envType", n.envType),
     ("status", toJson n.status),
     ("url", n.url),
-    ("leanDecls", toJson (n.leanDecls.map (·.toString)))
+    ("leanDecls", toJson (n.leanDecls.map (·.toString))),
+    ("moduleName", n.moduleName)
   ]
 
 instance : ToJson Edge where

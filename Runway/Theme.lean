@@ -474,30 +474,16 @@ def buildNodeLookup (nodes : Array NodeInfo) : Std.HashMap String NodeInfo :=
     acc.insert node.label node
 
 /-- Build a lookup map from module name to nodes in that module.
-    Module name is derived from declaration names (e.g., `PrimeNumberTheoremAnd.Wiener` from
-    `PrimeNumberTheoremAnd.Wiener.MainTheorem`).
+    Uses the `moduleName` field from dep-graph.json (set by Dress).
 
-    Registers each node under BOTH:
-    - Short module name: `Wiener`
-    - Full module name: `PrimeNumberTheoremAnd.Wiener`
+    Registers each node under:
+    - Full module name: e.g., `PrimeNumberTheoremAnd.Wiener`
 
-    This allows `\inputleanmodule{PrimeNumberTheoremAnd.Wiener}` to match nodes whose
-    declaration names are stored as `Wiener.MainTheorem` (without project prefix). -/
-def buildModuleLookup (projectName : String) (nodes : Array NodeInfo) : Std.HashMap String (Array NodeInfo) :=
+    This allows `\inputleanmodule{PrimeNumberTheoremAnd.Wiener}` to match nodes. -/
+def buildModuleLookup (_projectName : String) (nodes : Array NodeInfo) : Std.HashMap String (Array NodeInfo) :=
   nodes.foldl (init := {}) fun acc node =>
-    node.declNames.foldl (init := acc) fun acc' declName =>
-      let parts := declName.components
-      if parts.length > 1 then
-        let moduleParts := parts.dropLast
-        let moduleName := moduleParts.foldl (fun a p => a ++ p) Lean.Name.anonymous
-        let shortModuleStr := moduleName.toString
-        -- Register under short module name
-        let acc'' := acc'.insert shortModuleStr (acc'.getD shortModuleStr #[] |>.push node)
-        -- Also register under full module name (projectName.shortModule)
-        let fullModuleStr := projectName ++ "." ++ shortModuleStr
-        acc''.insert fullModuleStr (acc''.getD fullModuleStr #[] |>.push node)
-      else
-        acc'
+    if node.moduleName.isEmpty then acc
+    else acc.insert node.moduleName (acc.getD node.moduleName #[] |>.push node)
 
 /-- Replace module placeholder divs with rendered nodes from that module.
     Finds `<div class="lean-module-placeholder" data-module="X"></div>` and replaces with

@@ -76,7 +76,8 @@ instance : FromJson Node where
     let url ← j.getObjValAs? String "url" <|> pure ""
     let leanDeclsJson ← j.getObjValAs? (Array String) "leanDecls" <|> pure #[]
     let leanDecls := leanDeclsJson.map (·.toName)
-    return { id, label, envType, status, url, leanDecls }
+    let moduleName := (j.getObjValAs? String "moduleName").toOption.getD ""
+    return { id, label, envType, status, url, leanDecls, moduleName }
 
 instance : FromJson Edge where
   fromJson? j := do
@@ -142,6 +143,7 @@ def NodeArtifact.toNodeInfo (art : NodeArtifact) (uses : Array String := #[]) : 
     proofBodyHtml := art.proofBodyHtml
     hoverData := art.hoverData
     declNames := art.node.leanDecls
+    moduleName := art.node.moduleName
     uses := uses
     url := art.node.url }
 

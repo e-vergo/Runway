@@ -117,6 +117,8 @@ structure NodeInfo where
   hoverData : Option String := none
   /-- Associated Lean declaration names -/
   declNames : Array Name
+  /-- Module name containing this node (e.g., "PrimeNumberTheoremAnd.Wiener") -/
+  moduleName : String := ""
   /-- Labels of nodes this node depends on -/
   uses : Array String
   /-- URL to this node's section in the HTML (anchor ID like "#thm-main") -/
@@ -161,6 +163,7 @@ instance : ToJson NodeInfo where
     ("proofBodyHtml", match n.proofBodyHtml with | some c => .str c | none => .null),
     ("hoverData", match n.hoverData with | some h => .str h | none => .null),
     ("declNames", .arr (n.declNames.map fun name => .str name.toString)),
+    ("moduleName", .str n.moduleName),
     ("uses", .arr (n.uses.map .str)),
     ("url", .str n.url),
     ("pagePath", match n.pagePath with | some p => .str p | none => .null),
@@ -197,6 +200,7 @@ instance : FromJson NodeInfo where
     let hoverData := (j.getObjValAs? String "hoverData").toOption
     let declNamesJson ← j.getObjValAs? (Array String) "declNames" <|> pure #[]
     let declNames := declNamesJson.map (·.toName)
+    let moduleName := (j.getObjValAs? String "moduleName").toOption.getD ""
     let uses ← j.getObjValAs? (Array String) "uses" <|> pure #[]
     let url ← j.getObjValAs? String "url" <|> pure ""
     let pagePath := (j.getObjValAs? String "pagePath").toOption
@@ -208,7 +212,7 @@ instance : FromJson NodeInfo where
     let potentialIssue := (j.getObjValAs? String "potentialIssue").toOption
     let technicalDebt := (j.getObjValAs? String "technicalDebt").toOption
     let misc := (j.getObjValAs? String "misc").toOption
-    return { label, title, envType, status, statementHtml, proofHtml, signatureHtml, proofBodyHtml, hoverData, declNames, uses, url, pagePath, displayNumber, keyDeclaration, message, priorityItem, blocked, potentialIssue, technicalDebt, misc }
+    return { label, title, envType, status, statementHtml, proofHtml, signatureHtml, proofBodyHtml, hoverData, declNames, moduleName, uses, url, pagePath, displayNumber, keyDeclaration, message, priorityItem, blocked, potentialIssue, technicalDebt, misc }
 
 namespace NodeInfo
 

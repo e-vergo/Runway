@@ -544,6 +544,7 @@ def buildSiteFromArtifacts (config : Config) (dressedDir : FilePath) : IO Bluepr
       proofBodyHtml := proofBodyHtml
       hoverData := hoverData
       declNames := node.leanDecls
+      moduleName := node.moduleName
       uses := (depGraph.inEdges node.id).map (·.from_.replace ":" "-")
       url := node.url.replace ":" "-"  -- Normalize URL anchor to match HTML id
       -- Node metadata from manifest
