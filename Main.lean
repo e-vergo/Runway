@@ -336,14 +336,14 @@ def loadBlueprintChapters (config : Config) (allNodes : Array NodeInfo) : IO (Ar
     return chapters
 
 /-- Assign page paths to nodes based on which chapter they belong to.
-    Nodes in chapters get `pagePath := some "chapters/<slug>.html"`.
+    Nodes in chapters get `pagePath := some "<slug>.html"`.
     Nodes not in any chapter (or if no chapters exist) get `pagePath := none`. -/
 def assignPagePaths (nodes : Array NodeInfo) (chapters : Array ChapterInfo) : Array NodeInfo := Id.run do
   -- Build a map from node label to chapter page path
   let mut labelToPagePath : HashMap String String := {}
 
   for chapter in chapters do
-    let chapterPagePath := s!"chapters/{chapter.slug}.html"
+    let chapterPagePath := s!"{chapter.slug}.html"
 
     -- All nodes in chapter.nodeLabels belong to this chapter page
     for nodeLabel in chapter.nodeLabels do
