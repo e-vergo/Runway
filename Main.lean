@@ -487,11 +487,10 @@ def buildSiteFromArtifacts (config : Config) (dressedDir : FilePath) : IO Bluepr
     let technicalDebt := manifest.getTechnicalDebt node.id
     let misc := manifest.getMisc node.id
 
-    -- Determine displayName:
-    -- node.label from Dress contains displayName (if set) or full Lean name
+    -- title: node.label from Dress contains the title (custom title if set, or full Lean name)
     -- If node.label looks like a qualified Lean name (contains "."), derive short name from leanDecls
-    -- Otherwise use node.label as the custom displayName
-    let displayName : Option String :=
+    -- Otherwise use node.label as the custom title
+    let title : Option String :=
       if node.label.contains '.' then
         -- Full qualified name like "SBSTest.Chapter2.square_nonneg"
         -- Derive short name from first leanDecl (last component of the name)
@@ -502,12 +501,12 @@ def buildSiteFromArtifacts (config : Config) (dressedDir : FilePath) : IO Bluepr
         else
           some normalizedId  -- Fall back to LaTeX label
       else
-        -- Custom displayName was set
+        -- Custom title was set
         some node.label
 
     nodes := nodes.push {
       label := normalizedId  -- Use normalized label for consistent lookup
-      title := some node.label
+      title := title
       envType := node.envType
       status := node.status
       -- Left column: LaTeX statement and proof (for MathJax rendering)
@@ -520,7 +519,6 @@ def buildSiteFromArtifacts (config : Config) (dressedDir : FilePath) : IO Bluepr
       declNames := node.leanDecls
       uses := (depGraph.inEdges node.id).map (·.from_.replace ":" "-")
       url := node.url.replace ":" "-"  -- Normalize URL anchor to match HTML id
-      displayName := displayName
       -- Node metadata from manifest
       keyDeclaration := keyDeclaration
       message := message
@@ -557,8 +555,8 @@ def buildSiteFromArtifacts (config : Config) (dressedDir : FilePath) : IO Bluepr
       let technicalDebt := manifest.getTechnicalDebt key
       let misc := manifest.getMisc key
 
-      -- Derive displayName: short name from art.name (last component) or fall back to key
-      let displayName : Option String :=
+      -- Derive title: short name from art.name (last component) or fall back to key
+      let title : Option String :=
         if art.name.isEmpty then some key
         else
           let declName := art.name.toName
@@ -566,7 +564,7 @@ def buildSiteFromArtifacts (config : Config) (dressedDir : FilePath) : IO Bluepr
 
       finalNodes := finalNodes.push {
         label := key
-        title := if art.name.isEmpty then none else some art.name
+        title := title
         envType := "theorem"  -- Default, will be overridden when graph is available
         status := if art.leanOk then .proven else .stated
         -- Left column: LaTeX statement and proof
@@ -579,7 +577,6 @@ def buildSiteFromArtifacts (config : Config) (dressedDir : FilePath) : IO Bluepr
         declNames := if art.name.isEmpty then #[] else #[art.name.toName]
         uses := art.uses.map (·.replace ":" "-")  -- Normalize dependency labels
         url := s!"#node-{key}"
-        displayName := displayName
         -- Node metadata from manifest
         keyDeclaration := keyDecl
         message := message

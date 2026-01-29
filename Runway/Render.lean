@@ -403,7 +403,7 @@ def renderKeyDeclarations (site : BlueprintSite) : Html :=
             divClass "key-declaration-link" (
               -- Clickable title link
               .tag "a" #[("href", node.url), ("class", "key-declaration-title-link")] (
-                Html.text true (node.displayName.getD node.label)
+                Html.text true (node.title.getD node.label)
               ) ++
               -- Preview content (NOT wrapped in anchor - allows text selection)
               divClass "key-declaration-preview" (
@@ -446,7 +446,7 @@ def renderMessages (site : BlueprintSite) : Html :=
         .seq (nodesWithMessages.map fun node =>
           let msg := node.message.getD ""
           .tag "li" #[] (
-            .tag "a" #[("href", node.url)] (Html.text true (node.displayName.getD node.label)) ++
+            .tag "a" #[("href", node.url)] (Html.text true (node.title.getD node.label)) ++
             .tag "span" #[("class", "message-text")] (Html.text true s!" — {msg}")
           )
         )
@@ -483,7 +483,7 @@ def renderProjectNotes (site : BlueprintSite) : Html :=
             .tag "ul" #[("class", "notes-list")] (
               .seq (messageNodes.map fun node =>
                 .tag "li" #[] (
-                  .tag "a" #[("href", node.url)] (Html.text true (node.displayName.getD node.label)) ++
+                  .tag "a" #[("href", node.url)] (Html.text true (node.title.getD node.label)) ++
                   divClass "note-content" (Html.text true (node.message.getD ""))
                 )
               )
@@ -509,7 +509,7 @@ where
           .seq (nodes.map fun node =>
             let text := getText node
             .tag "li" #[] (
-              .tag "a" #[("href", node.url)] (Html.text true (node.displayName.getD node.label)) ++
+              .tag "a" #[("href", node.url)] (Html.text true (node.title.getD node.label)) ++
               (if text.isEmpty then Html.empty else
                 spanClass "note-text" (Html.text true s!" — {text}"))
             )
@@ -643,7 +643,7 @@ where
           htmlLink s!"#{node.label}" (
             spanClass "node-env" (Html.text true node.envType) ++
             Html.text true " " ++
-            Html.text true (node.displayName.getD node.label)
+            Html.text true (node.title.getD node.label)
           ) (some s!"status-{node.status.toCssClass}")
         )
       )

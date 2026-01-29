@@ -123,8 +123,6 @@ structure NodeInfo where
   url : String
   /-- Display number in chapter.section.item format (e.g., "4.1.1") -/
   displayNumber : Option String := none
-  /-- Optional custom display name for rendering -/
-  displayName : Option String := none
   /-- Whether this is a key declaration for dashboard highlighting -/
   keyDeclaration : Bool := false
   /-- Optional message annotation -/
@@ -164,7 +162,6 @@ instance : ToJson NodeInfo where
     ("uses", .arr (n.uses.map .str)),
     ("url", .str n.url),
     ("displayNumber", match n.displayNumber with | some d => .str d | none => .null),
-    ("displayName", match n.displayName with | some d => .str d | none => .null),
     ("keyDeclaration", .bool n.keyDeclaration),
     ("message", match n.message with | some m => .str m | none => .null),
     ("priorityItem", .bool n.priorityItem),
@@ -200,7 +197,6 @@ instance : FromJson NodeInfo where
     let uses ← j.getObjValAs? (Array String) "uses" <|> pure #[]
     let url ← j.getObjValAs? String "url" <|> pure ""
     let displayNumber := (j.getObjValAs? String "displayNumber").toOption
-    let displayName := (j.getObjValAs? String "displayName").toOption
     let keyDeclaration := (j.getObjValAs? Bool "keyDeclaration").toOption.getD false
     let message := (j.getObjValAs? String "message").toOption
     let priorityItem := (j.getObjValAs? Bool "priorityItem").toOption.getD false
@@ -208,7 +204,7 @@ instance : FromJson NodeInfo where
     let potentialIssue := (j.getObjValAs? String "potentialIssue").toOption
     let technicalDebt := (j.getObjValAs? String "technicalDebt").toOption
     let misc := (j.getObjValAs? String "misc").toOption
-    return { label, title, envType, status, statementHtml, proofHtml, signatureHtml, proofBodyHtml, hoverData, declNames, uses, url, displayNumber, displayName, keyDeclaration, message, priorityItem, blocked, potentialIssue, technicalDebt, misc }
+    return { label, title, envType, status, statementHtml, proofHtml, signatureHtml, proofBodyHtml, hoverData, declNames, uses, url, displayNumber, keyDeclaration, message, priorityItem, blocked, potentialIssue, technicalDebt, misc }
 
 /-- A page in the blueprint site -/
 structure SitePage where
