@@ -70,7 +70,7 @@ def findCompiler (compiler : Compiler) : IO (Option System.FilePath) := do
       args := #[compilerName]
     }
     if result.exitCode == 0 then
-      return some ⟨result.stdout.trim⟩
+      return some ⟨result.stdout.trimAscii.toString⟩
     else
       return none
   catch _ =>
@@ -105,7 +105,7 @@ def runCompiler (config : PdfConfig) (texPath : System.FilePath) : IO CompileRes
 
   let workDir := texPath.parent.getD "."
   let texFileName := texPath.fileName.getD "document.tex"
-  let baseName := texFileName.dropRight 4  -- Remove .tex
+  let baseName := (texFileName.dropEnd 4).toString  -- Remove .tex
 
   -- Build compiler arguments based on compiler type
   -- Since we run from workDir (cwd), use just the filename, not full path

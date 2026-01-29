@@ -531,7 +531,7 @@ def renderChecks (site : BlueprintSite) : Html :=
   let connectednessIcon := if checks.isConnected then "✓" else "✗"
   let connectednessText := if checks.isConnected
     then "Graph is connected"
-    else s!"Graph has {checks.numComponents} disconnected components"
+    else "Graph is disconnected"
 
   -- Cycles check
   let cyclesClass := if checks.cycles.isEmpty then "check-pass" else "check-fail"

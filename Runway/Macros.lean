@@ -51,7 +51,7 @@ private structure ParseState where
 /-- Get character at current position, or none if at end -/
 private def ParseState.peek (s : ParseState) : Option Char :=
   if s.pos < s.content.length then
-    some (s.content.get ⟨s.pos⟩)
+    some (String.Pos.Raw.get s.content ⟨s.pos⟩)
   else
     none
 
