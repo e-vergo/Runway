@@ -580,18 +580,18 @@ def renderChecks (site : BlueprintSite) : Html :=
 /-- Render the dashboard grid -/
 def renderDashboard (site : BlueprintSite) : Html :=
   divClass "dashboard-grid" (
-    -- Top row: Progress (fixed width) + Key Theorems (fills remaining space)
+    -- Single row with two columns
     divClass "dashboard-row top-row" (
       -- Left column: Progress + Checks stacked vertically
       divClass "dashboard-cell progress-cell" (
         renderProgress site ++
         renderChecks site
       ) ++
-      divClass "dashboard-cell key-declarations-cell" (renderKeyDeclarations site)
-    ) ++
-    -- Bottom row: Project Notes spanning full width
-    divClass "dashboard-row bottom-row" (
-      divClass "dashboard-cell notes-cell" (renderProjectNotes site)
+      -- Right column: Key Declarations + Project Notes stacked vertically
+      divClass "dashboard-cell key-declarations-cell" (
+        renderKeyDeclarations site ++
+        renderProjectNotes site
+      )
     )
   )
 
