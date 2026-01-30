@@ -204,12 +204,10 @@ def renderNode (node : NodeInfo) : RenderM Html := do
 /-- Render a node as a modal for the dependency graph (wrapping sbs-container in modal structure) -/
 def renderNodeModal (node : NodeInfo) : RenderM Html := do
   let sbsContent ← renderNode node
-  -- Link to the node's location in the blueprint (use chapter page if available, otherwise index)
-  let linkUrl := s!"#{node.label}"
-  -- Pass status information for the modal header
-  let statusColor := node.status.toColor
-  let statusTitle := node.status.toDisplayString
-  return DepGraph.wrapInModal node.label sbsContent linkUrl (some statusColor) (some statusTitle)
+  -- Link to the node's location in the blueprint (uses pagePath + url anchor)
+  let linkUrl := node.fullUrl
+  -- Status info no longer passed - the sbs-content already has the status dot
+  return DepGraph.wrapInModal node.label sbsContent linkUrl
 
 /-- Generate all modals for the dependency graph page -/
 def renderAllModals (nodes : Array NodeInfo) : RenderM Html := do
