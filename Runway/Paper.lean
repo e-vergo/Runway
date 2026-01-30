@@ -66,7 +66,7 @@ def toVerificationLevel (status : String) : VerificationLevel :=
     Note: This is a lossy conversion since VerificationLevel has fewer states. -/
 def verificationLevelToDressStatus : VerificationLevel → Dress.Graph.NodeStatus
   | .verified => .fullyProven
-  | .inProgress => .stated
+  | .inProgress => .sorry
   | .notStarted => .notReady
 
 /-- Render verification badge HTML -/
@@ -358,8 +358,8 @@ where
 /-- Convert NodeStatus to VerificationLevel -/
 def nodeStatusToVerificationLevel (status : NodeStatus) : VerificationLevel :=
   match status with
-  | .proven | .fullyProven | .mathlibReady | .inMathlib => .verified
-  | .sorry | .stated | .ready => .inProgress
+  | .proven | .fullyProven | .mathlibReady => .verified
+  | .sorry | .ready => .inProgress
   | .notReady => .notStarted
 
 /-- Convert LaTeX content to HTML by processing lists and text commands -/
