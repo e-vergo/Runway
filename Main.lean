@@ -410,18 +410,18 @@ def assignDisplayNumbers (nodes : Array NodeInfo) (chapters : Array ChapterInfo)
     | some num => { node with displayNumber := some num }
     | none => node
 
-/-- Parse StatusCounts from JSON -/
+/-- Parse StatusCounts from JSON.
+    Backwards compatible: silently ignores deprecated `stated` and `inMathlib` fields
+    if present in old manifest.json files. -/
 def parseStatusCounts (json : Lean.Json) : Option StatusCounts :=
   let getNat (key : String) : Nat := (json.getObjValAs? Nat key).toOption.getD 0
   some {
     notReady := getNat "notReady"
-    stated := getNat "stated"
     ready := getNat "ready"
     hasSorry := getNat "hasSorry"
     proven := getNat "proven"
     fullyProven := getNat "fullyProven"
     mathlibReady := getNat "mathlibReady"
-    inMathlib := getNat "inMathlib"
     total := getNat "total"
   }
 

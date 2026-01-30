@@ -533,20 +533,18 @@ def getNodesByStatus (status : NodeStatus) : TraverseM (Array Node) := do
   let nodes ← getAllNodes
   return nodes.filter (·.status == status)
 
-/-- Count nodes by status (returns counts for all 8 statuses) -/
+/-- Count nodes by status (returns counts for all 6 statuses) -/
 def countNodesByStatus : TraverseM StatusCounts := do
   let nodes ← getAllNodes
   let mut counts : StatusCounts := {}
   for node in nodes do
     match node.status with
     | .notReady => counts := { counts with notReady := counts.notReady + 1 }
-    | .stated => counts := { counts with stated := counts.stated + 1 }
     | .ready => counts := { counts with ready := counts.ready + 1 }
     | .sorry => counts := { counts with hasSorry := counts.hasSorry + 1 }
     | .proven => counts := { counts with proven := counts.proven + 1 }
     | .fullyProven => counts := { counts with fullyProven := counts.fullyProven + 1 }
     | .mathlibReady => counts := { counts with mathlibReady := counts.mathlibReady + 1 }
-    | .inMathlib => counts := { counts with inMathlib := counts.inMathlib + 1 }
   return { counts with total := nodes.size }
 
 /-! ## Site Building -/

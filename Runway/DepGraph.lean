@@ -73,14 +73,10 @@ private def graphLegendCompact : Html :=
   .tag "div" #[("class", "dep-graph-legend")] (
     .tag "div" #[("class", "legend-title")] (.text true "Legend") ++
     .tag "div" #[("class", "legend-items")] (
-      -- Color status section (8 items)
+      -- Color status section (6 items)
       .tag "div" #[("class", "legend-item")] (
         .tag "span" #[("class", "legend-swatch not-ready")] Html.empty ++
         .tag "span" #[] (.text true "Not Ready")
-      ) ++
-      .tag "div" #[("class", "legend-item")] (
-        .tag "span" #[("class", "legend-swatch stated")] Html.empty ++
-        .tag "span" #[] (.text true "Stated")
       ) ++
       .tag "div" #[("class", "legend-item")] (
         .tag "span" #[("class", "legend-swatch ready")] Html.empty ++
@@ -101,10 +97,6 @@ private def graphLegendCompact : Html :=
       .tag "div" #[("class", "legend-item")] (
         .tag "span" #[("class", "legend-swatch mathlib-ready")] Html.empty ++
         .tag "span" #[] (.text true "Mathlib Ready")
-      ) ++
-      .tag "div" #[("class", "legend-item")] (
-        .tag "span" #[("class", "legend-swatch in-mathlib")] Html.empty ++
-        .tag "span" #[] (.text true "In Mathlib")
       ) ++
       -- Horizontal separator
       .tag "div" #[("class", "legend-separator")] Html.empty ++

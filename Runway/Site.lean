@@ -150,13 +150,13 @@ instance : ToJson NodeInfo where
     ("envType", .str n.envType),
     ("status", match n.status with
       | .notReady => .str "notReady"
-      | .stated => .str "stated"
+      | .stated => .str "notReady"  -- Map deprecated stated to notReady
       | .ready => .str "ready"
       | .sorry => .str "sorry"
       | .proven => .str "proven"
       | .fullyProven => .str "fullyProven"
       | .mathlibReady => .str "mathlibReady"
-      | .inMathlib => .str "inMathlib"),
+      | .inMathlib => .str "mathlibReady"),  -- Map deprecated inMathlib to mathlibReady
     ("statementHtml", .str n.statementHtml),
     ("proofHtml", match n.proofHtml with | some p => .str p | none => .null),
     ("signatureHtml", match n.signatureHtml with | some c => .str c | none => .null),
@@ -185,14 +185,14 @@ instance : FromJson NodeInfo where
     let statusStr ← j.getObjValAs? String "status"
     let status := match statusStr with
       | "notReady" => NodeStatus.notReady
-      | "stated" => NodeStatus.stated
+      | "stated" => NodeStatus.notReady  -- Map deprecated stated to notReady
       | "ready" => NodeStatus.ready
       | "sorry" => NodeStatus.sorry
       | "proven" => NodeStatus.proven
       | "fullyProven" => NodeStatus.fullyProven
       | "mathlibReady" => NodeStatus.mathlibReady
-      | "inMathlib" => NodeStatus.inMathlib
-      | _ => NodeStatus.stated
+      | "inMathlib" => NodeStatus.mathlibReady  -- Map deprecated inMathlib to mathlibReady
+      | _ => NodeStatus.notReady  -- Default to notReady instead of stated
     let statementHtml ← j.getObjValAs? String "statementHtml"
     let proofHtml := (j.getObjValAs? String "proofHtml").toOption
     let signatureHtml := (j.getObjValAs? String "signatureHtml").toOption
@@ -241,41 +241,39 @@ structure SitePage where
 /-- Count of nodes by status -/
 structure StatusCounts where
   notReady : Nat := 0
-  stated : Nat := 0
   ready : Nat := 0
   hasSorry : Nat := 0  -- Named hasSorry because `sorry` is a keyword
   proven : Nat := 0
   fullyProven : Nat := 0
   mathlibReady : Nat := 0
-  inMathlib : Nat := 0
   total : Nat := 0
   deriving Inhabited, Repr
 
 instance : ToJson StatusCounts where
   toJson sc := .mkObj [
     ("notReady", .num sc.notReady),
-    ("stated", .num sc.stated),
     ("ready", .num sc.ready),
     ("hasSorry", .num sc.hasSorry),
     ("proven", .num sc.proven),
     ("fullyProven", .num sc.fullyProven),
     ("mathlibReady", .num sc.mathlibReady),
-    ("inMathlib", .num sc.inMathlib),
     ("total", .num sc.total)
   ]
 
 instance : FromJson StatusCounts where
   fromJson? j := do
     let notReady ← j.getObjValAs? Nat "notReady" <|> pure 0
-    let stated ← j.getObjValAs? Nat "stated" <|> pure 0
+    -- Backwards compatibility: add old "stated" count to notReady
+    let statedCompat ← j.getObjValAs? Nat "stated" <|> pure 0
     let ready ← j.getObjValAs? Nat "ready" <|> pure 0
     let hasSorry ← j.getObjValAs? Nat "hasSorry" <|> pure 0
     let proven ← j.getObjValAs? Nat "proven" <|> pure 0
     let fullyProven ← j.getObjValAs? Nat "fullyProven" <|> pure 0
     let mathlibReady ← j.getObjValAs? Nat "mathlibReady" <|> pure 0
-    let inMathlib ← j.getObjValAs? Nat "inMathlib" <|> pure 0
+    -- Backwards compatibility: add old "inMathlib" count to mathlibReady
+    let inMathlibCompat ← j.getObjValAs? Nat "inMathlib" <|> pure 0
     let total ← j.getObjValAs? Nat "total" <|> pure 0
-    return { notReady, stated, ready, hasSorry, proven, fullyProven, mathlibReady, inMathlib, total }
+    return { notReady := notReady + statedCompat, ready, hasSorry, proven, fullyProven, mathlibReady := mathlibReady + inMathlibCompat, total }
 
 /-! ## Blueprint Site -/
 
@@ -321,13 +319,11 @@ def computeStatusCounts (site : BlueprintSite) : StatusCounts := Id.run do
   for node in site.nodes do
     match node.status with
     | .notReady => counts := { counts with notReady := counts.notReady + 1 }
-    | .stated => counts := { counts with stated := counts.stated + 1 }
     | .ready => counts := { counts with ready := counts.ready + 1 }
     | .sorry => counts := { counts with hasSorry := counts.hasSorry + 1 }
     | .proven => counts := { counts with proven := counts.proven + 1 }
     | .fullyProven => counts := { counts with fullyProven := counts.fullyProven + 1 }
     | .mathlibReady => counts := { counts with mathlibReady := counts.mathlibReady + 1 }
-    | .inMathlib => counts := { counts with inMathlib := counts.inMathlib + 1 }
   return { counts with total := site.nodes.size }
 
 /-- Get counts of nodes by status (uses precomputed if available, otherwise computes) -/
@@ -342,12 +338,12 @@ def getStatusCounts (site : BlueprintSite) : StatusCounts :=
 def totalNodes (site : BlueprintSite) : Nat :=
   site.nodes.size
 
-/-- Percentage of nodes that are proven, fullyProven, mathlibReady, or inMathlib -/
+/-- Percentage of nodes that are proven, fullyProven, or mathlibReady -/
 def completionPercentage (site : BlueprintSite) : Float :=
   if site.nodes.isEmpty then 0.0
   else
     let counts := site.statusCounts
-    let completed := counts.proven + counts.fullyProven + counts.mathlibReady + counts.inMathlib
+    let completed := counts.proven + counts.fullyProven + counts.mathlibReady
     (completed.toFloat / site.nodes.size.toFloat) * 100.0
 
 end BlueprintSite

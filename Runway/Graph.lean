@@ -15,42 +15,39 @@ namespace Runway.Graph
 
 open Lean (Name ToJson FromJson)
 
-/-- Node status for visualization coloring.
+/-- Node status for visualization coloring (6 statuses).
     Mirrors Dress.Graph.Types.NodeStatus for compatibility. -/
 inductive NodeStatus where
-  | notReady     -- Manual: not ready to formalize (gray)
-  | stated       -- Default: statement exists in blueprint (yellow)
-  | ready        -- Manual: ready to formalize (light blue)
-  | sorry        -- Derived: has sorryAx in proof (orange/red)
-  | proven       -- Derived: formalized without sorry (green)
-  | fullyProven  -- Auto-computed: this + all ancestors proven (dark green)
-  | mathlibReady -- Manual: ready to upstream to Mathlib (medium blue)
-  | inMathlib    -- Derived or manual: already in Mathlib (dark blue)
+  | notReady     -- Default + Manual: not ready to formalize (sandy brown)
+  | ready        -- Manual: ready to formalize (light sea green)
+  | sorry        -- Derived: has sorryAx in proof (dark red)
+  | proven       -- Derived: formalized without sorry (light green)
+  | fullyProven  -- Auto-computed: this + all ancestors proven (forest green)
+  | mathlibReady -- Manual: highest priority, ready for/in mathlib (light blue)
   deriving Repr, Inhabited, BEq, DecidableEq
 
 instance : ToJson NodeStatus where
   toJson
     | .notReady => .str "notReady"
-    | .stated => .str "stated"
     | .ready => .str "ready"
     | .sorry => .str "sorry"
     | .proven => .str "proven"
     | .fullyProven => .str "fullyProven"
     | .mathlibReady => .str "mathlibReady"
-    | .inMathlib => .str "inMathlib"
 
 instance : FromJson NodeStatus where
   fromJson? j := do
     let s ← j.getStr?
     match s with
     | "notReady" => return .notReady
-    | "stated" => return .stated
     | "ready" => return .ready
     | "sorry" => return .sorry
     | "proven" => return .proven
     | "fullyProven" => return .fullyProven
     | "mathlibReady" => return .mathlibReady
-    | "inMathlib" => return .inMathlib
+    -- Backwards compatibility
+    | "stated" => return .notReady
+    | "inMathlib" => return .mathlibReady
     | _ => throw s!"Unknown NodeStatus: {s}"
 
 /-- A node in the dependency graph -/
