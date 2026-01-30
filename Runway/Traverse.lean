@@ -58,13 +58,13 @@ instance : FromJson NodeStatus where
     let s ← j.getStr?
     match s with
     | "notReady" => return .notReady
-    | "stated" => return .stated
+    | "stated" => return .notReady  -- Backwards compat: stated → notReady
     | "ready" => return .ready
     | "sorry" => return .sorry
     | "proven" => return .proven
     | "fullyProven" => return .fullyProven
     | "mathlibReady" => return .mathlibReady
-    | "inMathlib" => return .inMathlib
+    | "inMathlib" => return .mathlibReady  -- Backwards compat: inMathlib → mathlibReady
     | _ => throw s!"Unknown NodeStatus: {s}"
 
 instance : FromJson Node where
@@ -377,7 +377,7 @@ def buildGraphFromArtifacts (artifacts : HashMap String DeclArtifact) : Graph :=
 
   for (key, art) in artifacts.toArray do
     -- Create node
-    let status : NodeStatus := if art.leanOk then .proven else .stated
+    let status : NodeStatus := if art.leanOk then .proven else .notReady
     -- Determine env type from label prefix
     let envType :=
       if art.label.startsWith "thm:" || art.label.startsWith "thm-" then "theorem"
