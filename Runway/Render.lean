@@ -285,36 +285,31 @@ def renderProgress (site : BlueprintSite) : Html :=
   if total == 0 then Html.empty
   else
     -- Build pie slices with cumulative offset
-    -- Order: not-ready, stated, ready, sorry, proven, fully-proven, mathlib-ready, in-mathlib
+    -- Order: not-ready, ready, sorry, proven, fully-proven, mathlib-ready (6 statuses)
     let (slice1, off1) := renderPieSlice counts.notReady total 0.0 "#F4A460"
-    let (slice2, off2) := renderPieSlice counts.stated total off1 "#FFD700"
-    let (slice3, off3) := renderPieSlice counts.ready total off2 "#20B2AA"
-    let (slice4, off4) := renderPieSlice counts.hasSorry total off3 "#8B0000"
-    let (slice5, off5) := renderPieSlice counts.proven total off4 "#90EE90"
-    let (slice6, off6) := renderPieSlice counts.fullyProven total off5 "#228B22"
-    let (slice7, off7) := renderPieSlice counts.mathlibReady total off6 "#4169E1"
-    let (slice8, _) := renderPieSlice counts.inMathlib total off7 "#191970"
+    let (slice2, off2) := renderPieSlice counts.ready total off1 "#20B2AA"
+    let (slice3, off3) := renderPieSlice counts.hasSorry total off2 "#8B0000"
+    let (slice4, off4) := renderPieSlice counts.proven total off3 "#90EE90"
+    let (slice5, off5) := renderPieSlice counts.fullyProven total off4 "#228B22"
+    let (slice6, _) := renderPieSlice counts.mathlibReady total off5 "#87CEEB"
 
     let pieSlices := .tag "svg" #[
       ("class", "stats-pie"),
       ("viewBox", "0 0 32 32")
-    ] (slice1 ++ slice2 ++ slice3 ++ slice4 ++ slice5 ++ slice6 ++ slice7 ++ slice8)
+    ] (slice1 ++ slice2 ++ slice3 ++ slice4 ++ slice5 ++ slice6)
 
     let legendItems :=
       renderLegendItem counts.notReady "not ready" "not-ready" ++
-      renderLegendItem counts.stated "stated" "stated" ++
       renderLegendItem counts.ready "ready" "ready" ++
       renderLegendItem counts.hasSorry "sorry" "sorry" ++
       renderLegendItem counts.proven "proven" "proven" ++
       renderLegendItem counts.fullyProven "fully proven" "fully-proven" ++
-      renderLegendItem counts.mathlibReady "mathlib ready" "mathlib-ready" ++
-      renderLegendItem counts.inMathlib "in mathlib" "in-mathlib"
+      renderLegendItem counts.mathlibReady "mathlib ready" "mathlib-ready"
 
     -- Compute stats for the two-column layout
     let provenCount := counts.proven + counts.fullyProven
     let sorryCount := counts.hasSorry
-    let otherCount := counts.notReady + counts.stated + counts.ready +
-                      counts.mathlibReady + counts.inMathlib
+    let otherCount := counts.notReady + counts.ready + counts.mathlibReady
 
     -- Compute attention counts from site.nodes
     let blockedCount := site.nodes.filter (·.blocked.isSome) |>.size
@@ -610,10 +605,10 @@ def renderIndex (site : BlueprintSite) : RenderM Html := do
   -- Dependency graph section with embedded SVG (if available)
   let graphSection := DepGraph.graphSection site.depGraphSvg site.depGraphJson
 
-  -- Node list by status (group proven + fullyProven, mathlib ready + in mathlib)
+  -- Node list by status (group proven + fullyProven)
   let provenNodes := site.nodesByStatus .proven ++ site.nodesByStatus .fullyProven
-  let mathLibNodes := site.nodesByStatus .mathlibReady ++ site.nodesByStatus .inMathlib
-  let statedNodes := site.nodesByStatus .stated
+  let mathLibNodes := site.nodesByStatus .mathlibReady
+  let notReadyNodes := site.nodesByStatus .notReady
 
   let nodeList := divClass "node-lists" (
     (if provenNodes.isEmpty then Html.empty else
@@ -623,13 +618,13 @@ def renderIndex (site : BlueprintSite) : RenderM Html := do
       )) ++
     (if mathLibNodes.isEmpty then Html.empty else
       divClass "node-list mathlib" (
-        .tag "h3" #[] (Html.text true "From Mathlib") ++
+        .tag "h3" #[] (Html.text true "Mathlib Ready") ++
         renderNodeList mathLibNodes
       )) ++
-    (if statedNodes.isEmpty then Html.empty else
-      divClass "node-list stated" (
-        .tag "h3" #[] (Html.text true "Stated") ++
-        renderNodeList statedNodes
+    (if notReadyNodes.isEmpty then Html.empty else
+      divClass "node-list not-ready" (
+        .tag "h3" #[] (Html.text true "Not Ready") ++
+        renderNodeList notReadyNodes
       ))
   )
 
