@@ -40,13 +40,11 @@ open Runway.Graph (NodeStatus Graph Node Edge)
 /-- Convert Runway.Graph.NodeStatus to Dress.Graph.NodeStatus for rendering -/
 def toDressStatus : Runway.Graph.NodeStatus → Dress.Graph.NodeStatus
   | .notReady => .notReady
-  | .stated => .stated
   | .ready => .ready
   | .sorry => .sorry
   | .proven => .proven
   | .fullyProven => .fullyProven
   | .mathlibReady => .mathlibReady
-  | .inMathlib => .inMathlib
 
 /-! ## Render Monad -/
 
@@ -131,35 +129,29 @@ namespace Graph.NodeStatus
 /-- Convert NodeStatus to CSS class -/
 def toCssClass : NodeStatus → String
   | .notReady => "not-ready"
-  | .stated => "stated"
   | .ready => "ready"
   | .sorry => "sorry"
   | .proven => "proven"
   | .fullyProven => "fully-proven"
   | .mathlibReady => "mathlib-ready"
-  | .inMathlib => "in-mathlib"
 
 /-- Convert NodeStatus to display string -/
 def toDisplayString : NodeStatus → String
   | .notReady => "Not Ready"
-  | .stated => "Stated"
   | .ready => "Ready"
   | .sorry => "Has Sorry"
   | .proven => "Proven"
   | .fullyProven => "Fully Proven"
   | .mathlibReady => "Mathlib Ready"
-  | .inMathlib => "In Mathlib"
 
 /-- Convert NodeStatus to color hex code -/
 def toColor : NodeStatus → String
   | .notReady => "#F4A460"
-  | .stated => "#FFD700"
   | .ready => "#20B2AA"
   | .sorry => "#8B0000"
   | .proven => "#90EE90"
   | .fullyProven => "#228B22"
-  | .mathlibReady => "#4169E1"
-  | .inMathlib => "#191970"
+  | .mathlibReady => "#87CEEB"  -- Light Blue
 
 end Graph.NodeStatus
 
