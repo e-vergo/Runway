@@ -802,7 +802,8 @@ def runBuild (cliConfig : CLIConfig) : IO UInt32 := do
 
       -- Generate paper.html (reuse paper command logic)
       let docContent := Runway.Paper.convertDocument doc artifacts config
-      let paperContent := Runway.Paper.renderPaperContent config docContent
+      let paperMetadata := Runway.Paper.extractMetadata doc config.title
+      let paperContent := Runway.Paper.renderPaperContent paperMetadata docContent
       let ctx : Runway.Render.Context := {
         config := config
         depGraph := site.depGraph
@@ -994,8 +995,9 @@ def runPaper (cliConfig : CLIConfig) : IO UInt32 := do
     -- Convert document to paper HTML
     let docContent := Runway.Paper.convertDocument doc artifacts config
 
-    -- Wrap in ar5iv-paper container
-    let paperContent := Runway.Paper.renderPaperContent config docContent
+    -- Extract metadata from parsed document and wrap in ar5iv-paper container
+    let paperMetadata := Runway.Paper.extractMetadata doc config.title
+    let paperContent := Runway.Paper.renderPaperContent paperMetadata docContent
 
     -- Apply sidebar template (same as other blueprint pages)
     let ctx : Runway.Render.Context := {

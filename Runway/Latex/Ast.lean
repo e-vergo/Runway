@@ -49,8 +49,18 @@ structure Preamble where
   title : Option String := none
   author : Option String := none
   date : Option String := none
+  abstract : Option String := none
   rawContent : String := ""
   deriving Repr, Inhabited
+
+/-- Split author string on \and to get array of authors -/
+def Preamble.authors (p : Preamble) : Array String :=
+  match p.author with
+  | none => #[]
+  | some authorStr =>
+    -- Split on \and (with various whitespace patterns)
+    let parts := authorStr.splitOn "\\and"
+    parts.map (fun s => s.trimAscii.toString) |>.filter (!·.isEmpty) |>.toArray
 
 /-- Blueprint-specific metadata for theorem environments -/
 structure TheoremMetadata where

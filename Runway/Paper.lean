@@ -26,6 +26,26 @@ open Std (HashMap)
 open Runway.Graph (NodeStatus)
 open Runway (divClass)
 
+/-- Paper metadata extracted from LaTeX preamble -/
+structure PaperMetadata where
+  /-- Paper title (from \title{} or config.title fallback) -/
+  title : String
+  /-- Paper authors (from \author{} split on \and) -/
+  authors : Array String := #[]
+  /-- Paper abstract (from \begin{abstract}...\end{abstract}) -/
+  abstract : Option String := none
+  deriving Inhabited, Repr
+
+/-- Extract paper metadata from a parsed document's preamble -/
+def extractMetadata (doc : Latex.Document) (fallbackTitle : String) : PaperMetadata :=
+  let preamble := match doc.root with
+    | .document p _ => p
+    | _ => {}
+  { title := preamble.title.getD fallbackTitle
+    authors := preamble.authors
+    abstract := preamble.abstract
+  }
+
 /-- Verification status for badge display -/
 inductive VerificationLevel
   | notStarted   -- No Lean code attached
@@ -156,17 +176,17 @@ def renderProofOnly (info : PaperNodeInfo) : Html :=
   | none => Html.empty
 
 /-- Generate paper header (title, authors, abstract) -/
-def renderHeader (config : Config) : Html :=
+def renderHeader (metadata : PaperMetadata) : Html :=
   .tag "header" #[("class", "paper-header")] (
     .tag "h1" #[("class", "paper-title")] (
-      Html.text true (config.paperTitle.getD config.title)
+      Html.text true metadata.title
     ) ++
-    (if config.paperAuthors.isEmpty then Html.empty else
+    (if metadata.authors.isEmpty then Html.empty else
       .tag "div" #[("class", "paper-authors")] (
-        Html.text true (", ".intercalate config.paperAuthors.toList)
+        Html.text true (", ".intercalate metadata.authors.toList)
       )
     ) ++
-    (match config.paperAbstract with
+    (match metadata.abstract with
      | some abstract =>
        .tag "div" #[("class", "paper-abstract")] (
          .tag "strong" #[] (Html.text true "Abstract. ") ++
@@ -177,9 +197,9 @@ def renderHeader (config : Config) : Html :=
 
 /-- Render paper content (header, body, footer) wrapped in ar5iv-paper div.
     This is the content that goes inside the sidebar template. -/
-def renderPaperContent (config : Config) (content : Html) : Html :=
+def renderPaperContent (metadata : PaperMetadata) (content : Html) : Html :=
   divClass "ar5iv-paper" (
-    renderHeader config ++
+    renderHeader metadata ++
     .tag "main" #[("class", "paper-content")] content ++
     .tag "footer" #[("class", "paper-footer")] (
       Html.text true "Generated with " ++

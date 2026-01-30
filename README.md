@@ -62,9 +62,6 @@ Create a `runway.json` file in your project root:
   "docgen4Url": "docs/",
   "baseUrl": "/",
   "paperTexPath": "blueprint/src/paper.tex",
-  "paperTitle": "Paper Title",
-  "paperAuthors": ["Author One", "Author Two"],
-  "paperAbstract": "Abstract text...",
   "pdfCompiler": "tectonic"
 }
 ```
@@ -82,10 +79,9 @@ Create a `runway.json` file in your project root:
 | `baseUrl` | String | No | `"/"` | Base URL for site links |
 | `outputDir` | String | No | `"_site"` | Output directory for generated HTML |
 | `paperTexPath` | String | No | - | Path to paper.tex (enables paper generation) |
-| `paperTitle` | String | No | - | Paper title (falls back to `title`) |
-| `paperAuthors` | Array | No | `[]` | Paper author names |
-| `paperAbstract` | String | No | - | Paper abstract text |
 | `pdfCompiler` | String | No | auto-detect | LaTeX compiler: `tectonic`, `pdflatex`, `xelatex`, `lualatex` |
+
+**Note**: Paper metadata (title, authors, abstract) is automatically extracted from `paper.tex` using standard LaTeX commands (`\title{}`, `\author{}`, `\begin{abstract}...\end{abstract}`).
 
 ## CLI Commands
 

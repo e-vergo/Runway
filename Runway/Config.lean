@@ -34,12 +34,6 @@ structure Config where
   assetsDir : System.FilePath
   /-- Path to paper.tex for ar5iv-style paper generation -/
   paperTexPath : Option String := none
-  /-- Paper title (defaults to site title if not specified) -/
-  paperTitle : Option String := none
-  /-- Paper authors -/
-  paperAuthors : Array String := #[]
-  /-- Paper abstract -/
-  paperAbstract : Option String := none
   /-- Preferred PDF compiler (pdflatex, tectonic, xelatex, lualatex) -/
   pdfCompiler : Option String := none
   /-- Pre-parsed MathJax macros JSON string (populated at runtime from blueprint.tex) -/
@@ -57,9 +51,6 @@ instance : ToJson Config where
     ("blueprintTexPath", match c.blueprintTexPath with | some p => .str p | none => .null),
     ("assetsDir", .str c.assetsDir.toString),
     ("paperTexPath", match c.paperTexPath with | some p => .str p | none => .null),
-    ("paperTitle", match c.paperTitle with | some t => .str t | none => .null),
-    ("paperAuthors", ToJson.toJson c.paperAuthors),
-    ("paperAbstract", match c.paperAbstract with | some a => .str a | none => .null),
     ("pdfCompiler", match c.pdfCompiler with | some p => .str p | none => .null)
   ]
 
@@ -74,9 +65,6 @@ instance : FromJson Config where
     let blueprintTexPath : Option String := (j.getObjValAs? String "blueprintTexPath").toOption
     let assetsDir : String ← j.getObjValAs? String "assetsDir"
     let paperTexPath : Option String := (j.getObjValAs? String "paperTexPath").toOption
-    let paperTitle : Option String := (j.getObjValAs? String "paperTitle").toOption
-    let paperAuthors : Array String ← j.getObjValAs? (Array String) "paperAuthors" <|> pure #[]
-    let paperAbstract : Option String := (j.getObjValAs? String "paperAbstract").toOption
     let pdfCompiler : Option String := (j.getObjValAs? String "pdfCompiler").toOption
     return {
       title := title
@@ -88,9 +76,6 @@ instance : FromJson Config where
       blueprintTexPath := blueprintTexPath
       assetsDir := assetsDir
       paperTexPath := paperTexPath
-      paperTitle := paperTitle
-      paperAuthors := paperAuthors
-      paperAbstract := paperAbstract
       pdfCompiler := pdfCompiler
     }
 

@@ -522,6 +522,41 @@ def parsePreamble : ParserM Preamble := do
   preamble := { preamble with rawContent := "\n".intercalate rawLines.toList }
   return preamble
 
+/-- Parse abstract environment content (returns plain text) -/
+def parseAbstractContent : ParserM String := do
+  let mut content := ""
+  while true do
+    match ← peekKind with
+    | none => break
+    | some (.command "end") =>
+      let _ ← advance
+      let endName ← parseBraceContent
+      if endName == "abstract" then break
+      else content := content ++ "\\end{" ++ endName ++ "}"
+    | some _ =>
+      match ← advance with
+      | some t => content := content ++ t.raw
+      | none => break
+  return content.trimAscii.toString
+
+/-- Try to parse abstract environment at current position -/
+def tryParseAbstract : ParserM (Option String) := do
+  skipTrivia
+  if ← isCommand "begin" then
+    -- Peek ahead to see if it's an abstract
+    let savedPos := (← get).pos
+    let _ ← advance
+    let envName ← parseBraceContent
+    if envName == "abstract" then
+      let abstractContent ← parseAbstractContent
+      return some abstractContent
+    else
+      -- Not abstract, restore position
+      modify fun s => { s with pos := savedPos }
+      return none
+  else
+    return none
+
 /-- Parse complete document -/
 def parseDocument : ParserM Document := do
   let preamble ← parsePreamble
@@ -531,8 +566,13 @@ def parseDocument : ParserM Document := do
     let _ ← advance
     let envName ← parseBraceContent
     if envName == "document" then
+      -- Try to parse abstract right after \begin{document}
+      let abstractOpt ← tryParseAbstract
+      let preambleWithAbstract := match abstractOpt with
+        | some abs => { preamble with abstract := some abs }
+        | none => preamble
       let body ← parseBody
-      return { root := Block.document preamble body }
+      return { root := Block.document preambleWithAbstract body }
     else
       addError "Expected \\begin{document}"
       return { root := Block.document preamble #[] }
