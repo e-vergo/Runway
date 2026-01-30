@@ -150,13 +150,11 @@ instance : ToJson NodeInfo where
     ("envType", .str n.envType),
     ("status", match n.status with
       | .notReady => .str "notReady"
-      | .stated => .str "notReady"  -- Map deprecated stated to notReady
       | .ready => .str "ready"
       | .sorry => .str "sorry"
       | .proven => .str "proven"
       | .fullyProven => .str "fullyProven"
-      | .mathlibReady => .str "mathlibReady"
-      | .inMathlib => .str "mathlibReady"),  -- Map deprecated inMathlib to mathlibReady
+      | .mathlibReady => .str "mathlibReady"),
     ("statementHtml", .str n.statementHtml),
     ("proofHtml", match n.proofHtml with | some p => .str p | none => .null),
     ("signatureHtml", match n.signatureHtml with | some c => .str c | none => .null),
