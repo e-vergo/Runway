@@ -349,27 +349,23 @@ def generateStatementsContainer (json : Option String) : Html :=
 def generateStatementsContainerFromHtml (modalsHtml : Html) : Html :=
   .tag "div" #[("id", "statements"), ("style", "display:none;")] modalsHtml
 
-/-- Wrap a pre-rendered sbs-container in a modal structure -/
+/-- Wrap a pre-rendered sbs-container in a modal structure.
+    Note: statusColor and statusTitle are kept for API compatibility but ignored,
+    since the status dot is already embedded in sbsContent via thm_header_extras. -/
 def wrapInModal (nodeId : String) (sbsContent : Html) (linkUrl : String)
-    (statusColor : Option String := none) (statusTitle : Option String := none) : Html :=
-  -- Status dot element (if color provided)
-  let statusDot := match statusColor with
-    | some color =>
-      let title := statusTitle.getD "Status"
-      .tag "span" #[("class", "status-dot modal-status-dot"),
-                    ("style", s!"background:{color}"),
-                    ("title", s!"Status: {title}")] Html.empty
-    | none => Html.empty
+    (_statusColor : Option String := none) (_statusTitle : Option String := none) : Html :=
+  -- The status dot is already embedded in sbsContent via thm_header_extras
+  -- We just need to add the [blueprint] link inline using CSS positioning
   .tag "div" #[("class", "dep-modal-container"), ("id", s!"{nodeId}_modal"), ("style", "display:none;")] (
     .tag "div" #[("class", "dep-modal-content")] (
       .tag "div" #[("class", "dep-modal-header-bar")] (
-        .tag "div" #[("class", "dep-modal-header-left")] (
-          statusDot ++
-          .tag "a" #[("href", linkUrl), ("class", "blueprint-link")] (Html.text true "[blueprint]")
-        ) ++
         .tag "span" #[("class", "dep-closebtn")] (Html.text true "×")
       ) ++
-      sbsContent
+      .tag "div" #[("class", "dep-modal-body-wrapper")] (
+        -- The blueprint link will be positioned inline with the theorem header via CSS
+        .tag "a" #[("href", linkUrl), ("class", "modal-blueprint-link")] (Html.text true "[blueprint]") ++
+        sbsContent
+      )
     )
   )
 
