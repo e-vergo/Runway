@@ -351,16 +351,25 @@ def generateStatementsContainerFromHtml (modalsHtml : Html) : Html :=
 
 /-- Wrap a pre-rendered sbs-container in a modal structure -/
 def wrapInModal (nodeId : String) (sbsContent : Html) (linkUrl : String)
-    (_statusColor : Option String := none) (_statusTitle : Option String := none) : Html :=
+    (statusColor : Option String := none) (statusTitle : Option String := none) : Html :=
+  -- Status dot element (if color provided)
+  let statusDot := match statusColor with
+    | some color =>
+      let title := statusTitle.getD "Status"
+      .tag "span" #[("class", "status-dot modal-status-dot"),
+                    ("style", s!"background:{color}"),
+                    ("title", s!"Status: {title}")] Html.empty
+    | none => Html.empty
   .tag "div" #[("class", "dep-modal-container"), ("id", s!"{nodeId}_modal"), ("style", "display:none;")] (
     .tag "div" #[("class", "dep-modal-content")] (
       .tag "div" #[("class", "dep-modal-header-bar")] (
+        .tag "div" #[("class", "dep-modal-header-left")] (
+          statusDot ++
+          .tag "a" #[("href", linkUrl), ("class", "blueprint-link")] (Html.text true "[blueprint]")
+        ) ++
         .tag "span" #[("class", "dep-closebtn")] (Html.text true "×")
       ) ++
-      sbsContent ++
-      .tag "div" #[("class", "dep-modal-footer")] (
-        .tag "a" #[("href", linkUrl), ("class", "blueprint-link")] (Html.text true "[blueprint]")
-      )
+      sbsContent
     )
   )
 
