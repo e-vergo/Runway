@@ -61,15 +61,4 @@ def renderLink (baseUrl : Option String) (name : Name) : String :=
   | none =>
     s!"<span class=\"decl-name\">{nameStr}</span>"
 
-/-- Render multiple declaration links as HTML.
-
-Returns an empty string if the names array is empty.
-Otherwise, returns a span containing comma-separated links.
--/
-def renderLinks (baseUrl : Option String) (names : Array Name) : String :=
-  if names.isEmpty then ""
-  else
-    let links := names.map (renderLink baseUrl) |> Array.toList |> String.intercalate ", "
-    s!"<span class=\"decl-links\">Lean: {links}</span>"
-
 end Runway.DocGen4

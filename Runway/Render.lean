@@ -176,26 +176,6 @@ def htmlLink (href : String) (content : Html) (cls : Option String := none) : Ht
 
 /-! ## Node Rendering -/
 
-/-- Render declaration links for a node.
-
-Uses doc-gen4 URL format: `{baseUrl}/{Module}/{Submodule}.html#{declName}`
--/
-def renderDeclLinks (names : Array Name) (docgen4Url : Option String) : RenderM Html := do
-  if names.isEmpty then return Html.empty
-  let links ← names.mapM fun name => do
-    let nameStr := name.toString
-    let content := Html.text true nameStr
-    match docgen4Url with
-    | some baseUrl =>
-      let url := DocGen4.docUrl baseUrl name
-      return .tag "a" #[("href", url), ("class", "decl-link"), ("target", "_blank")] content
-    | none =>
-      return spanClass "decl-name" content
-  return divClass "node-decls" (
-    spanClass "decl-label" (Html.text true "Lean: ") ++
-    .seq (links.toList.intersperse (Html.text true ", ")).toArray
-  )
-
 /-- Render a single blueprint node (plasTeX side-by-side layout) -/
 def renderNode (node : NodeInfo) : RenderM Html := do
   let _ ← Render.registerHtmlId node.label

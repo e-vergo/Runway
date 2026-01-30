@@ -84,17 +84,17 @@ def parseBraceContent : ParserM String := do
   match ← peekKind with
   | some .braceOpen =>
     let _ ← advance
-    let mut content := ""
+    let mut parts : Array String := #[]
     let mut depth := 1
     while depth > 0 do
       match ← advance with
       | some tok =>
         match tok.kind with
-        | .braceOpen => depth := depth + 1; content := content ++ "{"
-        | .braceClose => depth := depth - 1; if depth > 0 then content := content ++ "}"
-        | _ => content := content ++ tok.raw
+        | .braceOpen => depth := depth + 1; parts := parts.push "{"
+        | .braceClose => depth := depth - 1; if depth > 0 then parts := parts.push "}"
+        | _ => parts := parts.push tok.raw
       | none => break
-    return content.trimAscii.toString
+    return ("".intercalate parts.toList).trimAscii.toString
   | _ => return ""
 
 /-- Parse optional bracket content -/
@@ -103,17 +103,17 @@ def parseBracketContent : ParserM (Option String) := do
   match ← peekKind with
   | some .bracketOpen =>
     let _ ← advance
-    let mut content := ""
+    let mut parts : Array String := #[]
     let mut depth := 1
     while depth > 0 do
       match ← advance with
       | some tok =>
         match tok.kind with
-        | .bracketOpen => depth := depth + 1; content := content ++ "["
-        | .bracketClose => depth := depth - 1; if depth > 0 then content := content ++ "]"
-        | _ => content := content ++ tok.raw
+        | .bracketOpen => depth := depth + 1; parts := parts.push "["
+        | .bracketClose => depth := depth - 1; if depth > 0 then parts := parts.push "]"
+        | _ => parts := parts.push tok.raw
       | none => break
-    return some content.trimAscii.toString
+    return some ("".intercalate parts.toList).trimAscii.toString
   | _ => return none
 
 /-- Parse comma-separated list -/

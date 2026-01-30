@@ -177,52 +177,30 @@ def loadDepGraphJson (dressedDir : FilePath) : IO (Option String) := do
 
 /-- Load and parse the blueprint.tex file to extract chapters -/
 def loadBlueprintChapters (config : Config) (allNodes : Array NodeInfo) : IO (Array ChapterInfo) := do
-  IO.println "[DEBUG] loadBlueprintChapters: Starting..."
-  (← IO.getStdout).flush
   match config.blueprintTexPath with
   | none =>
-    IO.println "[DEBUG] No blueprintTexPath configured, returning empty"
-    (← IO.getStdout).flush
     return #[]
   | some texPath =>
     let path : FilePath := texPath
-    IO.println s!"[DEBUG] blueprintTexPath = {texPath}"
-    (← IO.getStdout).flush
     if !(← path.pathExists) then
       IO.eprintln s!"Warning: Blueprint tex file not found at {texPath}"
       return #[]
 
     IO.println s!"  - Loading blueprint structure from {texPath}"
-    (← IO.getStdout).flush
-    IO.println "[DEBUG] Calling parseFile..."
-    (← IO.getStdout).flush
     let (doc, errors) ← parseFile path
-    IO.println s!"[DEBUG] parseFile complete, {errors.size} errors"
-    (← IO.getStdout).flush
 
     for err in errors do
       IO.eprintln s!"    LaTeX parse warning: {err}"
 
     -- Extract chapters from document
-    IO.println "[DEBUG] Extracting document body..."
-    (← IO.getStdout).flush
     let docBody := match doc.root with
       | .document _ body => body
       | other => #[other]
-    IO.println s!"[DEBUG] docBody has {docBody.size} elements"
-    (← IO.getStdout).flush
 
-    IO.println "[DEBUG] Extracting chapters..."
-    (← IO.getStdout).flush
     let chapterExtracts := extractChapters docBody
-    IO.println s!"[DEBUG] Found {chapterExtracts.size} chapter extracts"
-    (← IO.getStdout).flush
     IO.println s!"  - Found {chapterExtracts.size} chapters"
-    (← IO.getStdout).flush
 
     -- Build a map of module name -> nodes for quick lookup
-    IO.println s!"[DEBUG] Building moduleToNodes map from {allNodes.size} nodes..."
-    (← IO.getStdout).flush
     let moduleToNodes : HashMap Lean.Name (Array NodeInfo) := Id.run do
       let mut m : HashMap Lean.Name (Array NodeInfo) := {}
       for node in allNodes do
@@ -234,25 +212,18 @@ def loadBlueprintChapters (config : Config) (allNodes : Array NodeInfo) : IO (Ar
             let moduleName := moduleParts.foldl (fun acc p => acc ++ p) Lean.Name.anonymous
             m := m.insert moduleName (m.getD moduleName #[] |>.push node)
       return m
-    IO.println s!"[DEBUG] moduleToNodes map built: {moduleToNodes.size} modules"
 
     -- Build a map of node label -> NodeInfo for quick lookup
-    IO.println "[DEBUG] Building labelToNode map..."
     let labelToNode : HashMap String NodeInfo := Id.run do
       let mut m : HashMap String NodeInfo := {}
       for node in allNodes do
         m := m.insert node.label node
       return m
-    IO.println s!"[DEBUG] labelToNode map built: {labelToNode.size} labels"
 
     -- Convert chapter extracts to ChapterInfo
-    IO.println s!"[DEBUG] Converting {chapterExtracts.size} chapter extracts to ChapterInfo..."
     let mut chapters : Array ChapterInfo := #[]
-    let mut chapterIdx := 0
 
     for ce in chapterExtracts do
-      chapterIdx := chapterIdx + 1
-      IO.println s!"[DEBUG]   Processing chapter {chapterIdx}/{chapterExtracts.size}: {ce.title}"
       -- Extract module and node references from chapter body
       let moduleRefs := extractModuleRefs ce.body
       let nodeRefs := extractNodeRefs ce.body
@@ -278,13 +249,10 @@ def loadBlueprintChapters (config : Config) (allNodes : Array NodeInfo) : IO (Ar
         | none => pure ()
 
       -- Extract sections
-      IO.println s!"[DEBUG]     Extracting sections from chapter..."
       let sectionExtracts := extractSections ce.body
-      IO.println s!"[DEBUG]     Found {sectionExtracts.size} sections"
       let mut sectionInfos : Array SectionInfo := #[]
 
       for se in sectionExtracts do
-        IO.println s!"[DEBUG]       Processing section: {se.title}"
         -- Collect nodes for this section
         let sectionModuleRefs := extractModuleRefs se.body
         let sectionNodeRefs := extractNodeRefs se.body
@@ -305,9 +273,7 @@ def loadBlueprintChapters (config : Config) (allNodes : Array NodeInfo) : IO (Ar
           | none => pure ()
 
         -- Convert section body to HTML (excluding \inputleanmodule/\inputleannode which become placeholders)
-        IO.println s!"[DEBUG]       Converting section body to HTML..."
         let sectionHtmlResult := toHtml se.body
-        IO.println s!"[DEBUG]       Section HTML conversion complete"
 
         sectionInfos := sectionInfos.push {
           number := se.number
@@ -318,9 +284,7 @@ def loadBlueprintChapters (config : Config) (allNodes : Array NodeInfo) : IO (Ar
         }
 
       -- Convert chapter body to HTML
-      IO.println s!"[DEBUG]     Converting chapter body to HTML..."
       let chapterHtmlResult := toHtml ce.body
-      IO.println s!"[DEBUG]     Chapter HTML conversion complete"
 
       chapters := chapters.push {
         number := ce.number
@@ -332,7 +296,6 @@ def loadBlueprintChapters (config : Config) (allNodes : Array NodeInfo) : IO (Ar
         sections := sectionInfos
       }
 
-    IO.println s!"[DEBUG] loadBlueprintChapters: Complete, returning {chapters.size} chapters"
     return chapters
 
 /-- Assign page paths to nodes based on which chapter they belong to.
@@ -427,67 +390,30 @@ def parseStatusCounts (json : Lean.Json) : Option StatusCounts :=
 
 /-- Build a BlueprintSite from Dress artifacts -/
 def buildSiteFromArtifacts (config : Config) (dressedDir : FilePath) : IO BlueprintSite := do
-  IO.println "[DEBUG] buildSiteFromArtifacts: Starting..."
-  (← IO.getStdout).flush
-  IO.println s!"[DEBUG] dressedDir = {dressedDir}"
-  (← IO.getStdout).flush
-
   -- Load the enhanced manifest (contains stats and node metadata)
-  IO.println "[DEBUG] Loading enhanced manifest..."
-  (← IO.getStdout).flush
   let manifest ← loadEnhancedManifest dressedDir
-  IO.println "[DEBUG] Enhanced manifest loaded"
-  (← IO.getStdout).flush
   if manifest.hasStats then
     IO.println s!"  - Loaded enhanced manifest with precomputed stats"
 
   -- Parse precomputed stats from manifest if available
-  IO.println "[DEBUG] Parsing precomputed stats..."
-  (← IO.getStdout).flush
   let precomputedStats := manifest.stats.bind parseStatusCounts
-  IO.println "[DEBUG] Precomputed stats parsed"
-  (← IO.getStdout).flush
 
   -- Load the dependency graph
-  IO.println "[DEBUG] Loading dependency graph..."
-  (← IO.getStdout).flush
   let depGraph ← loadDepGraph dressedDir
-  IO.println s!"[DEBUG] Dependency graph loaded: {depGraph.nodes.size} nodes, {depGraph.edges.size} edges"
-  (← IO.getStdout).flush
 
   -- Load SVG for the graph (may be empty if not generated by Dress)
-  IO.println "[DEBUG] Loading dep graph SVG..."
-  (← IO.getStdout).flush
   let depGraphSvg ← loadDepGraphSvg dressedDir
-  IO.println s!"[DEBUG] SVG loaded: {if depGraphSvg.isSome then "yes" else "no"}"
-  (← IO.getStdout).flush
 
   -- Generate JSON from the graph we built (don't read from potentially empty file)
-  IO.println "[DEBUG] Generating dep graph JSON string..."
-  (← IO.getStdout).flush
   let depGraphJson := some depGraph.toJsonString
-  IO.println "[DEBUG] JSON string generated"
-  (← IO.getStdout).flush
 
   -- Load decl.tex artifacts (contains statement/proof HTML)
-  IO.println "[DEBUG] Loading declaration artifacts..."
-  (← IO.getStdout).flush
   let declArtifacts ← loadDeclArtifacts dressedDir
-  IO.println s!"[DEBUG] Declaration artifacts loaded: {declArtifacts.size}"
-  (← IO.getStdout).flush
   IO.println s!"  - Loaded {declArtifacts.size} declaration artifacts from .tex files"
-  (← IO.getStdout).flush
 
   -- Convert graph nodes to NodeInfo, populating HTML from artifacts
-  IO.println s!"[DEBUG] Converting {depGraph.nodes.size} graph nodes to NodeInfo..."
-  (← IO.getStdout).flush
   let mut nodes : Array NodeInfo := #[]
-  let mut nodeCount := 0
   for node in depGraph.nodes do
-    nodeCount := nodeCount + 1
-    if nodeCount % 10 == 0 then
-      IO.println s!"[DEBUG]   Processed {nodeCount}/{depGraph.nodes.size} nodes..."
-      (← IO.getStdout).flush
     -- Normalize node.id: artifacts are keyed with hyphens (colon -> hyphen)
     let normalizedId := node.id.replace ":" "-"
     -- Look up artifact by normalized id
@@ -556,19 +482,10 @@ def buildSiteFromArtifacts (config : Config) (dressedDir : FilePath) : IO Bluepr
       technicalDebt := technicalDebt
       misc := misc
     }
-    if nodeCount == depGraph.nodes.size then
-      IO.println s!"[DEBUG] Final node ({nodeCount}) processed, exiting loop..."
-      (← IO.getStdout).flush
-
-  IO.println "[DEBUG] Node loop completed, about to print size..."
-  (← IO.getStdout).flush
-  IO.println s!"[DEBUG] Finished converting graph nodes: {nodes.size} NodeInfo created"
-  (← IO.getStdout).flush
 
   -- If no nodes from graph, build from artifacts directly
   let mut finalNodes := nodes
   if nodes.isEmpty && !declArtifacts.isEmpty then
-    IO.println s!"[DEBUG] No graph nodes, building from {declArtifacts.size} artifacts directly..."
     for (key, art) in declArtifacts.toArray do
       -- Extract Lean signature and proof body HTML separately for right column
       let signatureHtml := art.leanSignatureHtml.filter (·.isEmpty == false)
@@ -615,27 +532,15 @@ def buildSiteFromArtifacts (config : Config) (dressedDir : FilePath) : IO Bluepr
         misc := misc
       }
 
-  IO.println s!"[DEBUG] Final nodes count: {finalNodes.size}"
-  (← IO.getStdout).flush
-
   -- Load chapters from blueprint.tex if configured
-  IO.println "[DEBUG] Loading blueprint chapters (LaTeX parsing)..."
-  (← IO.getStdout).flush
   let chapters ← loadBlueprintChapters config finalNodes
-  IO.println s!"[DEBUG] Blueprint chapters loaded: {chapters.size} chapters"
-  (← IO.getStdout).flush
 
   -- Assign page paths to nodes based on which chapter they belong to
-  IO.println "[DEBUG] Assigning page paths..."
   let nodesWithPaths := assignPagePaths finalNodes chapters
-  IO.println "[DEBUG] Page paths assigned"
 
   -- Assign display numbers to nodes based on chapter/section structure
-  IO.println "[DEBUG] Assigning display numbers..."
   let numberedNodes := assignDisplayNumbers nodesWithPaths chapters
-  IO.println "[DEBUG] Display numbers assigned"
 
-  IO.println "[DEBUG] buildSiteFromArtifacts: Complete, returning BlueprintSite"
   return {
     config := config
     nodes := numberedNodes
@@ -651,76 +556,33 @@ def buildSiteFromArtifacts (config : Config) (dressedDir : FilePath) : IO Bluepr
 /-- Execute the build command -/
 def runBuild (cliConfig : CLIConfig) : IO UInt32 := do
   IO.println "Runway: Building HTML from Dress artifacts..."
-  (← IO.getStdout).flush
-  IO.println s!"[DEBUG] runBuild: Starting..."
-  (← IO.getStdout).flush
-  IO.println "[DEBUG] About to print configPath..."
-  (← IO.getStdout).flush
-  IO.println s!"[DEBUG] configPath = {cliConfig.configPath}"
-  (← IO.getStdout).flush
-  IO.println s!"[DEBUG] buildDir = {cliConfig.buildDir}"
-  (← IO.getStdout).flush
 
   -- Load configuration
-  IO.println "[DEBUG] Loading config..."
-  (← IO.getStdout).flush
   let config ← loadConfig cliConfig.configPath
-  IO.println "[DEBUG] Config loaded, about to access fields..."
-  (← IO.getStdout).flush
-  IO.println s!"[DEBUG] Config loaded. assetsDir = {config.assetsDir}"
-  (← IO.getStdout).flush
-  IO.println s!"[DEBUG] blueprintTexPath = {config.blueprintTexPath.getD "none"}"
-  (← IO.getStdout).flush
-  IO.println s!"[DEBUG] paperTexPath = {config.paperTexPath.getD "none"}"
-  (← IO.getStdout).flush
 
   -- Determine directories
-  IO.println "[DEBUG] Creating dressedDir path..."
-  (← IO.getStdout).flush
   let dressedDir := cliConfig.buildDir / "dressed"
-  IO.println "[DEBUG] Creating outputDir path..."
-  (← IO.getStdout).flush
   let outputDir := cliConfig.outputDir.getD (cliConfig.buildDir / "runway")
-  IO.println s!"[DEBUG] dressedDir = {dressedDir}"
-  (← IO.getStdout).flush
-  IO.println s!"[DEBUG] outputDir = {outputDir}"
-  (← IO.getStdout).flush
 
   -- Check if dressed directory exists
-  IO.println "[DEBUG] Checking if dressed directory exists..."
-  (← IO.getStdout).flush
-  let dressedExists ← dressedDir.pathExists
-  IO.println s!"[DEBUG] pathExists returned: {dressedExists}"
-  (← IO.getStdout).flush
-  if !dressedExists then
+  if !(← dressedDir.pathExists) then
     IO.eprintln s!"Error: Dressed artifacts not found at {dressedDir}"
     IO.eprintln "Run 'lake build' to generate Dress artifacts first."
     return 1
-  IO.println "[DEBUG] Dressed directory exists"
-  (← IO.getStdout).flush
 
   -- Build the site
-  IO.println "[DEBUG] Calling buildSiteFromArtifacts..."
-  (← IO.getStdout).flush
   let site ← buildSiteFromArtifacts config dressedDir
-  IO.println s!"[DEBUG] buildSiteFromArtifacts returned. nodes={site.nodes.size}, chapters={site.chapters.size}"
 
   -- Generate HTML output
-  IO.println "[DEBUG] Creating output directory..."
   IO.FS.createDirAll outputDir
-  IO.println "[DEBUG] Output directory created"
 
   -- Generate site - multi-page if chapters available, single-page otherwise
-  IO.println "[DEBUG] Generating site HTML..."
   if site.chapters.isEmpty then
-    IO.println "[DEBUG] Using single-page mode (no chapters)"
     -- Single-page mode (original behavior)
     generateSite defaultTheme site outputDir
   else
-    IO.println s!"[DEBUG] Using multi-page mode ({site.chapters.size} chapters)"
     -- Multi-page mode with chapter pages
     generateMultiPageSite defaultTheme site outputDir
-  IO.println "[DEBUG] Site HTML generation complete"
 
   -- Copy assets from config.assetsDir to output
   let assetsOutputDir := outputDir / "assets"
@@ -783,13 +645,10 @@ def runBuild (cliConfig : CLIConfig) : IO UInt32 := do
   -- Generate paper.html and PDF if paperTexPath is configured
   let mut pdfGenerated := false
   match config.paperTexPath with
-  | none =>
-    IO.println "[DEBUG] paperTexPath not configured in runway.json, skipping paper generation"
+  | none => pure ()
   | some texPathStr =>
     let texPath : FilePath := texPathStr
     if ← texPath.pathExists then
-      IO.println s!"[DEBUG] Generating paper from {texPath}..."
-
       -- Parse paper.tex
       let (doc, errors) ← parseFile texPath
       for err in errors do
@@ -816,8 +675,6 @@ def runBuild (cliConfig : CLIConfig) : IO UInt32 := do
       IO.println s!"  - Generated paper.html"
 
       -- Generate PDF from paper.tex
-      IO.println "[DEBUG] Starting PDF generation..."
-
       -- Generate resolved LaTeX
       let latexConfig : Runway.Latex.LatexConfig := {
         preserveSourcePreamble := true
@@ -1224,17 +1081,12 @@ end Runway.CLI
 
 /-- Main entry point -/
 def main (args : List String) : IO UInt32 := do
-  IO.println "[DEBUG] main: Entry point reached"
-  IO.println s!"[DEBUG] main: args = {args}"
-  (← IO.getStdout).flush
   match Runway.CLI.parseArgs args with
   | .error msg =>
     IO.eprintln s!"Error: {msg}"
     IO.eprintln "Run 'runway --help' for usage."
     return 1
   | .ok cliConfig =>
-    IO.println s!"[DEBUG] main: parseArgs succeeded, command = {cliConfig.command}"
-    (← IO.getStdout).flush
     if cliConfig.showHelp then
       Runway.CLI.showHelp
       return 0
