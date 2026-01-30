@@ -226,7 +226,10 @@ def renderNodeModal (node : NodeInfo) : RenderM Html := do
   let sbsContent ← renderNode node
   -- Link to the node's location in the blueprint (use chapter page if available, otherwise index)
   let linkUrl := s!"#{node.label}"
-  return DepGraph.wrapInModal node.label sbsContent linkUrl
+  -- Pass status information for the modal header
+  let statusColor := node.status.toColor
+  let statusTitle := node.status.toDisplayString
+  return DepGraph.wrapInModal node.label sbsContent linkUrl (some statusColor) (some statusTitle)
 
 /-- Generate all modals for the dependency graph page -/
 def renderAllModals (nodes : Array NodeInfo) : RenderM Html := do
@@ -644,7 +647,8 @@ where
   renderNodeList (nodes : Array NodeInfo) : Html :=
     .tag "ul" #[("class", "node-index")] (
       .seq (nodes.map fun node =>
-        .tag "li" #[] (
+        .tag "li" #[("class", "node-list-item")] (
+          .tag "span" #[("class", "status-dot"), ("style", s!"background:{node.status.toColor}")] Html.empty ++
           htmlLink s!"#{node.label}" (
             spanClass "node-env" (Html.text true node.envType) ++
             Html.text true " " ++
