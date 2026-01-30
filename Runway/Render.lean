@@ -389,7 +389,7 @@ def renderKeyDeclarations (site : BlueprintSite) : Html :=
             -- Container with clickable title and selectable preview
             divClass "key-declaration-link" (
               -- Clickable title link
-              .tag "a" #[("href", node.url), ("class", "key-declaration-title-link")] (
+              .tag "a" #[("href", node.fullUrl), ("class", "key-declaration-title-link")] (
                 Html.text true (node.title.getD node.label)
               ) ++
               -- Preview content (NOT wrapped in anchor - allows text selection)
@@ -469,9 +469,12 @@ def renderProjectNotes (site : BlueprintSite) : Html :=
           else
             .tag "ul" #[("class", "notes-list")] (
               .seq (messageNodes.map fun node =>
-                .tag "li" #[] (
-                  .tag "a" #[("href", node.fullUrl)] (Html.text true (node.title.getD node.label)) ++
-                  divClass "note-content" (Html.text true (node.message.getD ""))
+                .tag "li" #[("class", "note-item-with-dot")] (
+                  .tag "span" #[("class", "status-dot"), ("style", s!"background:{node.status.toColor}")] Html.empty ++
+                  divClass "note-item-content" (
+                    .tag "a" #[("href", node.fullUrl)] (Html.text true (node.title.getD node.label)) ++
+                    divClass "note-content" (Html.text true (node.message.getD ""))
+                  )
                 )
               )
             )
@@ -495,10 +498,13 @@ where
         .tag "ul" #[("class", "notes-list")] (
           .seq (nodes.map fun node =>
             let text := getText node
-            .tag "li" #[] (
-              .tag "a" #[("href", node.fullUrl)] (Html.text true (node.title.getD node.label)) ++
-              (if text.isEmpty then Html.empty else
-                spanClass "note-text" (Html.text true s!" — {text}"))
+            .tag "li" #[("class", "note-item-with-dot")] (
+              .tag "span" #[("class", "status-dot"), ("style", s!"background:{node.status.toColor}")] Html.empty ++
+              divClass "note-item-content" (
+                .tag "a" #[("href", node.fullUrl)] (Html.text true (node.title.getD node.label)) ++
+                (if text.isEmpty then Html.empty else
+                  spanClass "note-text" (Html.text true s!" — {text}"))
+              )
             )
           )
         )
