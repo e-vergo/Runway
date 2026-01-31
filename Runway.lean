@@ -11,6 +11,7 @@ import Runway.Html
 import Runway.Dress
 import Runway.Traverse
 import Runway.Render
+import Runway.AvailableDocuments
 import Runway.Theme
 import Runway.Templates
 import Runway.DepGraph

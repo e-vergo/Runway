@@ -39,6 +39,95 @@ open Runway (loadDepGraph loadDeclArtifacts DeclArtifact)
 open Runway.Dress (loadEnhancedManifest EnhancedManifest)
 open Runway.Latex (parseFile extractChapters extractSections extractModuleRefs extractNodeRefs toHtml)
 
+/-!
+## Verso Document Detection
+
+Verso-authored documents (Blueprint.lean, Paper.lean) compile to HTML during `lake build`.
+The outputs are located in a configurable directory (default: `_out` or `.lake/build/verso/`).
+
+Detection logic:
+1. Check if source file exists: `{ProjectName}/Blueprint.lean` or `{ProjectName}/Paper.lean`
+2. Check if output HTML exists in the build directory
+3. If output exists, integrate it into the site as `blueprint_verso.html` or `paper_verso.html`
+-/
+
+/-- Possible locations where Verso document HTML outputs may be found -/
+def versOutputLocations (buildDir : FilePath) (projectName : String) : List FilePath :=
+  [ buildDir / "verso"                    -- .lake/build/verso/
+  , buildDir / "verso" / projectName      -- .lake/build/verso/{ProjectName}/
+  , buildDir.parent.getD "." / "_out"     -- .lake/_out/
+  , "_out"                                 -- _out/ (project root)
+  ]
+
+/-- Information about detected Verso documents -/
+structure VersoDocuments where
+  /-- Path to Verso Blueprint HTML output (if exists) -/
+  blueprintHtml : Option FilePath := none
+  /-- Path to Verso Paper HTML output (if exists) -/
+  paperHtml : Option FilePath := none
+  /-- Whether Blueprint.lean source exists -/
+  hasBlueprintSource : Bool := false
+  /-- Whether Paper.lean source exists -/
+  hasPaperSource : Bool := false
+  deriving Repr, Inhabited
+
+/-- Detect Verso document sources and outputs for a project -/
+def detectVersoDocuments (buildDir : FilePath) (projectName : String) : IO VersoDocuments := do
+  -- Check for source files
+  let blueprintSource : FilePath := projectName / "Blueprint.lean"
+  let paperSource : FilePath := projectName / "Paper.lean"
+
+  let hasBlueprintSource ← blueprintSource.pathExists
+  let hasPaperSource ← paperSource.pathExists
+
+  -- Search for output HTML files in possible locations
+  let locations := versOutputLocations buildDir projectName
+
+  let mut blueprintHtml : Option FilePath := none
+  let mut paperHtml : Option FilePath := none
+
+  for loc in locations do
+    -- Check for Blueprint output
+    if blueprintHtml.isNone then
+      -- Try various naming conventions
+      let candidates := [
+        loc / "blueprint.html",
+        loc / "Blueprint.html",
+        loc / "index.html",  -- Some Verso sites use index.html as main output
+        loc / projectName / "blueprint.html",
+        loc / projectName / "Blueprint.html"
+      ]
+      for candidate in candidates do
+        if ← candidate.pathExists then
+          blueprintHtml := some candidate
+          break
+
+    -- Check for Paper output
+    if paperHtml.isNone then
+      let candidates := [
+        loc / "paper.html",
+        loc / "Paper.html",
+        loc / projectName / "paper.html",
+        loc / projectName / "Paper.html"
+      ]
+      for candidate in candidates do
+        if ← candidate.pathExists then
+          paperHtml := some candidate
+          break
+
+  return {
+    blueprintHtml := blueprintHtml
+    paperHtml := paperHtml
+    hasBlueprintSource := hasBlueprintSource
+    hasPaperSource := hasPaperSource
+  }
+
+/-- Copy Verso document output to the site output directory -/
+def copyVersoOutput (srcPath : FilePath) (dstPath : FilePath) : IO Unit := do
+  let content ← IO.FS.readFile srcPath
+  IO.FS.writeFile dstPath content
+  IO.println s!"  - Copied Verso output: {srcPath} -> {dstPath}"
+
 /-- CLI configuration parsed from command-line arguments -/
 structure CLIConfig where
   /-- Path to the runway.json config file -/
@@ -822,6 +911,36 @@ Some prose text explaining the theorem...
   IO.FS.writeFile versoPaperOutputPath (Verso.Output.Html.doctype ++ "\n" ++ versoPaperHtml.asString)
   IO.println s!"  - Generated verso_paper.html"
 
+  -- Detect and integrate Verso document outputs
+  IO.println "  Checking for Verso document outputs..."
+  let versoDocs ← detectVersoDocuments cliConfig.buildDir config.projectName
+
+  -- Log detection status
+  if versoDocs.hasBlueprintSource then
+    IO.println s!"  - Found Verso Blueprint source: {config.projectName}/Blueprint.lean"
+  if versoDocs.hasPaperSource then
+    IO.println s!"  - Found Verso Paper source: {config.projectName}/Paper.lean"
+
+  -- Copy Verso Blueprint output if available
+  match versoDocs.blueprintHtml with
+  | some srcPath =>
+    let dstPath := outputDir / "blueprint_verso.html"
+    copyVersoOutput srcPath dstPath
+  | none =>
+    if versoDocs.hasBlueprintSource then
+      IO.println s!"  - Note: Verso Blueprint source exists but no HTML output found."
+      IO.println s!"    Run `lake build {config.projectName}:blueprint` to generate output."
+
+  -- Copy Verso Paper output if available
+  match versoDocs.paperHtml with
+  | some srcPath =>
+    let dstPath := outputDir / "paper_verso.html"
+    copyVersoOutput srcPath dstPath
+  | none =>
+    if versoDocs.hasPaperSource then
+      IO.println s!"  - Note: Verso Paper source exists but no HTML output found."
+      IO.println s!"    Run `lake build {config.projectName}:paper` to generate output."
+
   return 0
 
 /-- Execute the serve command -/
@@ -1142,6 +1261,12 @@ def showHelp : IO Unit := do
   IO.println "  --tex-only           Generate .tex file only (no PDF compilation)"
   IO.println "  -h, --help           Show this help message"
   IO.println "  -v, --version        Show version information"
+  IO.println ""
+  IO.println "Document Formats (auto-detected):"
+  IO.println "  LaTeX Blueprint      runway/src/blueprint.tex  -> blueprint.html"
+  IO.println "  Verso Blueprint      {Project}/Blueprint.lean  -> blueprint_verso.html"
+  IO.println "  LaTeX Paper          runway/src/paper.tex      -> paper.html"
+  IO.println "  Verso Paper          {Project}/Paper.lean      -> paper_verso.html"
   IO.println ""
   IO.println "Examples:"
   IO.println "  runway build                    Build site with default config"

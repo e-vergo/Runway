@@ -8,6 +8,7 @@ import Verso.Output.Html
 import Runway.Config
 import Runway.Site
 import Runway.Macros
+import Runway.AvailableDocuments
 
 /-!
 # Dependency Graph Loading and Embedding
@@ -373,7 +374,7 @@ def wrapInModal (nodeId : String) (sbsContent : Html) (linkUrl : String)
 
 /-- Render sidebar navigation for the dependency graph page.
     Duplicated from Theme.lean to avoid circular imports. -/
-private def renderDepGraphSidebar (chapters : Array ChapterInfo) (toRoot : String) (config : Config) : Html :=
+private def renderDepGraphSidebar (chapters : Array ChapterInfo) (toRoot : String) (config : Config) (availDocs : AvailableDocuments := {}) : Html :=
   let homeItem := .tag "li" #[] (
     .tag "a" #[("href", s!"{toRoot}index.html")] (Html.text true "Blueprint Home")
   )
@@ -394,15 +395,35 @@ private def renderDepGraphSidebar (chapters : Array ChapterInfo) (toRoot : Strin
     .tag "a" #[("href", s!"{toRoot}dep_graph.html")] (Html.text true "Dependency Graph")
   )
 
-  -- Paper link (web version)
-  let paperItem := .tag "li" #[] (
-    .tag "a" #[("href", s!"{toRoot}paper.html")] (Html.text true "Paper [web]")
-  )
+  -- Build document links based on what's available
+  let docItems : Array Html := Id.run do
+    let mut items : Array Html := #[]
 
-  -- PDF link (PDF version)
-  let pdfItem := .tag "li" #[] (
-    .tag "a" #[("href", s!"{toRoot}pdf.html")] (Html.text true "Paper [pdf]")
-  )
+    -- Verso Blueprint link (if available)
+    if availDocs.blueprintVerso then
+      items := items.push <| .tag "li" #[] (
+        .tag "a" #[("href", s!"{toRoot}blueprint_verso.html")] (Html.text true "Blueprint (Verso)")
+      )
+
+    -- Paper link (LaTeX web version, if available)
+    if availDocs.paper then
+      items := items.push <| .tag "li" #[] (
+        .tag "a" #[("href", s!"{toRoot}paper.html")] (Html.text true "Paper")
+      )
+
+    -- Verso Paper link (if available)
+    if availDocs.paperVerso then
+      items := items.push <| .tag "li" #[] (
+        .tag "a" #[("href", s!"{toRoot}paper_verso.html")] (Html.text true "Paper (Verso)")
+      )
+
+    -- PDF link (if available)
+    if availDocs.pdf then
+      items := items.push <| .tag "li" #[] (
+        .tag "a" #[("href", s!"{toRoot}pdf.html")] (Html.text true "Paper [pdf]")
+      )
+
+    return items
 
   -- External links (GitHub, API Docs)
   let githubItem := match config.githubUrl with
@@ -420,10 +441,13 @@ private def renderDepGraphSidebar (chapters : Array ChapterInfo) (toRoot : Strin
     .tag "span" #[("class", "theme-toggle-icon moon")] (Html.text true "☾")
   )
 
+  -- Build final nav items: home, chapters, separator, graph, docs (if any), separator, external links
+  let navItems := #[homeItem] ++ chapterItems ++ #[separator, graphItem] ++
+    (if docItems.isEmpty then #[] else docItems) ++
+    #[separator, githubItem, docsItem]
+
   .tag "nav" #[("class", "toc")] (
-    .tag "ul" #[("class", "sub-toc-0")] (
-      .seq #[homeItem] ++ .seq chapterItems ++ .seq #[separator, graphItem, paperItem, pdfItem, separator, githubItem, docsItem]
-    ) ++
+    .tag "ul" #[("class", "sub-toc-0")] (.seq navItems) ++
     themeToggle
   )
 
@@ -431,6 +455,7 @@ private def renderDepGraphSidebar (chapters : Array ChapterInfo) (toRoot : Strin
     If `modalsHtml` is provided, uses rich sbs-container modals; otherwise falls back to JSON-based basic modals. -/
 def fullPageGraph (svg : Option String) (json : Option String) (modalsHtml : Option Html)
     (_projectTitle : String) (chapters : Array ChapterInfo := #[]) (config : Option Config := none)
+    (availDocs : AvailableDocuments := {})
     (cssPath : String := "assets/blueprint.css") (jsPath : String := "assets/plastex.js")
     (versoJsPath : String := "assets/verso-code.js") : Html :=
   -- Use macros from config if available
@@ -440,7 +465,7 @@ def fullPageGraph (svg : Option String) (json : Option String) (modalsHtml : Opt
   -- Render sidebar if chapters and config are provided
   let toRoot := ""  -- dep_graph.html is at root level
   let sidebar := match config with
-    | some cfg => renderDepGraphSidebar chapters toRoot cfg
+    | some cfg => renderDepGraphSidebar chapters toRoot cfg availDocs
     | none => Html.empty
 
   .tag "html" #[("lang", "en")] (

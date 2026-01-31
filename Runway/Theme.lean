@@ -10,6 +10,7 @@ import Runway.Site
 import Runway.Render
 import Runway.DepGraph
 import Runway.Macros
+import Runway.AvailableDocuments
 
 /-!
 # Blueprint Theme System
@@ -65,7 +66,7 @@ structure Theme where
 namespace DefaultTheme
 
 /-- Render sidebar navigation for chapters -/
-def renderSidebar (chapters : Array ChapterInfo) (currentSlug : Option String) (toRoot : String) (config : Config) : Html :=
+def renderSidebar (chapters : Array ChapterInfo) (currentSlug : Option String) (toRoot : String) (config : Config) (availDocs : AvailableDocuments := {}) : Html :=
   let homeClass := if currentSlug.isNone then "active" else ""
   let homeItem := .tag "li" #[("class", homeClass)] (
     .tag "a" #[("href", s!"{toRoot}index.html")] (Html.text true "Blueprint Home")
@@ -90,23 +91,39 @@ def renderSidebar (chapters : Array ChapterInfo) (currentSlug : Option String) (
     .tag "a" #[("href", s!"{toRoot}dep_graph.html")] (Html.text true "Dependency Graph")
   )
 
-  -- Paper link (web version)
-  let paperClass := if currentSlug == some "paper" then "active" else ""
-  let paperItem := .tag "li" #[("class", paperClass)] (
-    .tag "a" #[("href", s!"{toRoot}paper.html")] (Html.text true "Paper [web]")
-  )
+  -- Build document links based on what's available
+  let docItems : Array Html := Id.run do
+    let mut items : Array Html := #[]
 
-  -- PDF link (PDF version)
-  let pdfClass := if currentSlug == some "pdf" then "active" else ""
-  let pdfItem := .tag "li" #[("class", pdfClass)] (
-    .tag "a" #[("href", s!"{toRoot}pdf.html")] (Html.text true "Paper [pdf]")
-  )
+    -- Verso Blueprint link (if available)
+    if availDocs.blueprintVerso then
+      let cls := if currentSlug == some "blueprint_verso" then "active" else ""
+      items := items.push <| .tag "li" #[("class", cls)] (
+        .tag "a" #[("href", s!"{toRoot}blueprint_verso.html")] (Html.text true "Blueprint (Verso)")
+      )
 
-  -- Verso Paper link (Verso-authored paper)
-  let versoPaperClass := if currentSlug == some "verso_paper" then "active" else ""
-  let versoPaperItem := .tag "li" #[("class", versoPaperClass)] (
-    .tag "a" #[("href", s!"{toRoot}verso_paper.html")] (Html.text true "Verso Paper")
-  )
+    -- Paper link (LaTeX web version, if available)
+    if availDocs.paper then
+      let cls := if currentSlug == some "paper" then "active" else ""
+      items := items.push <| .tag "li" #[("class", cls)] (
+        .tag "a" #[("href", s!"{toRoot}paper.html")] (Html.text true "Paper")
+      )
+
+    -- Verso Paper link (if available)
+    if availDocs.paperVerso then
+      let cls := if currentSlug == some "paper_verso" then "active" else ""
+      items := items.push <| .tag "li" #[("class", cls)] (
+        .tag "a" #[("href", s!"{toRoot}paper_verso.html")] (Html.text true "Paper (Verso)")
+      )
+
+    -- PDF link (if available)
+    if availDocs.pdf then
+      let cls := if currentSlug == some "pdf" then "active" else ""
+      items := items.push <| .tag "li" #[("class", cls)] (
+        .tag "a" #[("href", s!"{toRoot}pdf.html")] (Html.text true "Paper [pdf]")
+      )
+
+    return items
 
   -- External links (GitHub, API Docs)
   let githubItem := match config.githubUrl with
@@ -124,10 +141,13 @@ def renderSidebar (chapters : Array ChapterInfo) (currentSlug : Option String) (
     .tag "span" #[("class", "theme-toggle-icon moon")] (Html.text true "☾")
   )
 
+  -- Build final nav items: home, chapters, separator, graph, docs (if any), separator, external links
+  let navItems := #[homeItem] ++ chapterItems ++ #[separator, graphItem] ++
+    (if docItems.isEmpty then #[] else docItems) ++
+    #[separator, githubItem, docsItem]
+
   .tag "nav" #[("class", "toc")] (
-    .tag "ul" #[("class", "sub-toc-0")] (
-      .seq #[homeItem] ++ .seq chapterItems ++ .seq #[separator, graphItem, paperItem, pdfItem, versoPaperItem, separator, githubItem, docsItem]
-    ) ++
+    .tag "ul" #[("class", "sub-toc-0")] (.seq navItems) ++
     themeToggle
   )
 
@@ -228,7 +248,7 @@ def primaryTemplate : Template := fun content => do
   )
 
 /-- Primary template with chapter sidebar navigation -/
-def primaryTemplateWithSidebar (chapters : Array ChapterInfo) (currentSlug : Option String) : Template := fun content => do
+def primaryTemplateWithSidebar (chapters : Array ChapterInfo) (currentSlug : Option String) (availDocs : AvailableDocuments := {}) : Template := fun content => do
   let config ← Render.getConfig
   let toRoot ← Render.pathToRoot
 
@@ -236,7 +256,7 @@ def primaryTemplateWithSidebar (chapters : Array ChapterInfo) (currentSlug : Opt
   let mathjaxConfig := .tag "script" #[] (Html.text false (Macros.generateMathJaxConfig config.mathjaxMacrosJson))
 
   -- Build sidebar
-  let sidebar := renderSidebar chapters currentSlug toRoot config
+  let sidebar := renderSidebar chapters currentSlug toRoot config availDocs
 
   -- Build prev/next nav for chapter pages
   let prevNextNav := match currentSlug with
@@ -307,14 +327,14 @@ def nodeTemplate : NodeTemplate := renderNode
 def indexTemplate : IndexTemplate := renderIndex
 
 /-- Render full-page PDF viewer with embedded PDF -/
-def renderPdfPage (chapters : Array ChapterInfo) (config : Config) : Html :=
+def renderPdfPage (chapters : Array ChapterInfo) (config : Config) (availDocs : AvailableDocuments := {}) : Html :=
   let toRoot := ""
 
   -- MathJax configuration script (with macros from blueprint.tex for consistency)
   let mathjaxConfig := .tag "script" #[] (Html.text false (Macros.generateMathJaxConfig config.mathjaxMacrosJson))
 
   -- Build sidebar
-  let sidebar := renderSidebar chapters (some "pdf") toRoot config
+  let sidebar := renderSidebar chapters (some "pdf") toRoot config availDocs
 
   -- PDF viewer content
   let pdfContent := divClass "pdf-viewer-container" (
@@ -658,7 +678,7 @@ def renderMultiPageIndex (site : BlueprintSite) : RenderM Html := do
   )
 
 /-- Generate multi-page site with chapter-based navigation -/
-def generateMultiPageSite (_theme : Theme) (site : BlueprintSite) (outputDir : System.FilePath) : IO Unit := do
+def generateMultiPageSite (_theme : Theme) (site : BlueprintSite) (outputDir : System.FilePath) (availDocs : AvailableDocuments := {}) : IO Unit := do
   -- Create output directory
   IO.FS.createDirAll outputDir
 
@@ -671,7 +691,7 @@ def generateMultiPageSite (_theme : Theme) (site : BlueprintSite) (outputDir : S
 
   -- Generate index.html with chapter list
   let (indexContent, _) ← renderMultiPageIndex site |>.run ctx
-  let templateWithSidebar := DefaultTheme.primaryTemplateWithSidebar site.chapters none
+  let templateWithSidebar := DefaultTheme.primaryTemplateWithSidebar site.chapters none availDocs
   let (indexHtml, _) ← templateWithSidebar indexContent |>.run ctx
   let indexHtmlStr := Html.doctype ++ "\n" ++ indexHtml.asString
   IO.FS.writeFile (outputDir / "index.html") indexHtmlStr
@@ -680,7 +700,7 @@ def generateMultiPageSite (_theme : Theme) (site : BlueprintSite) (outputDir : S
   -- Generate chapter pages
   for chap in site.chapters do
     let (chapterContent, _) ← renderChapterContent chap site.nodes |>.run ctx
-    let chapterTemplate := DefaultTheme.primaryTemplateWithSidebar site.chapters (some chap.slug)
+    let chapterTemplate := DefaultTheme.primaryTemplateWithSidebar site.chapters (some chap.slug) availDocs
     let (chapterHtml, _) ← chapterTemplate chapterContent |>.run ctx
     let chapterHtmlStr := Html.doctype ++ "\n" ++ chapterHtml.asString
     IO.FS.writeFile (outputDir / s!"{chap.slug}.html") chapterHtmlStr
@@ -688,7 +708,7 @@ def generateMultiPageSite (_theme : Theme) (site : BlueprintSite) (outputDir : S
 
   -- Generate dedicated dependency graph page with rich modals and sidebar
   let (modalsHtml, _) ← renderAllModals site.nodes |>.run ctx
-  let depGraphPage := DepGraph.fullPageGraph site.depGraphSvg site.depGraphJson (some modalsHtml) site.config.title site.chapters (some site.config)
+  let depGraphPage := DepGraph.fullPageGraph site.depGraphSvg site.depGraphJson (some modalsHtml) site.config.title site.chapters (some site.config) availDocs
   let depGraphHtmlStr := Html.doctype ++ "\n" ++ depGraphPage.asString
   IO.FS.writeFile (outputDir / "dep_graph.html") depGraphHtmlStr
   IO.println s!"  Generated dep_graph.html"
