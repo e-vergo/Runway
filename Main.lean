@@ -685,7 +685,7 @@ def runBuild (cliConfig : CLIConfig) : IO UInt32 := do
   IO.FS.createDirAll outputDir
 
   -- Detect which documents will be available for sidebar links
-  -- We need to determine this BEFORE generating the site so the sidebar is correct
+  -- Phase 1: Detect source files (determines POTENTIAL availability)
   let paperTexExists ← match config.paperTexPath with
     | none => pure false
     | some texPathStr => (texPathStr : FilePath).pathExists
@@ -693,13 +693,28 @@ def runBuild (cliConfig : CLIConfig) : IO UInt32 := do
   -- Detect Verso documents (Blueprint.lean, Paper.lean sources)
   let versoDocs ← detectVersoDocuments cliConfig.buildDir config.projectName
 
-  -- Build AvailableDocuments based on what will be generated
+  -- Detect if a PDF compiler is available (needed for PDF generation)
+  let pdfCompilerAvailable ← do
+    match config.pdfCompiler with
+    | some compStr => pure (Runway.Pdf.Compiler.fromString? compStr).isSome
+    | none =>
+      let detected ← Runway.Pdf.detectCompiler
+      pure detected.isSome
+
+  -- Build AvailableDocuments based on what WILL be generated
+  -- 1. blueprintTex: Always true (index.html is always generated from blueprint.tex)
+  -- 2. paperWebTex: True if paper.tex exists (paper_tex.html will be generated)
+  -- 3. paperPdfTex: True if paper.tex exists AND PDF compiler available (paper.pdf + pdf_tex.html will be generated)
+  -- 4. blueprintVerso: True if Blueprint.lean source exists (placeholder or actual output will be present)
+  -- 5. paperWebVerso: True if Paper.lean source exists (placeholder or actual output will be present)
+  -- 6. paperPdfVerso: True if Paper.lean source exists AND PDF compiler available (pdf_verso.html will be useful)
   let availDocs : AvailableDocuments := {
-    blueprint := true  -- LaTeX blueprint is always generated from blueprint.tex
-    blueprintVerso := versoDocs.blueprintHtml.isSome || versoDocs.hasBlueprintSource  -- Verso Blueprint output exists or source exists (placeholder generated)
-    paper := paperTexExists  -- LaTeX paper will be generated if paper.tex exists
-    paperVerso := versoDocs.paperHtml.isSome || versoDocs.hasPaperSource  -- Verso Paper output exists or source exists (placeholder generated)
-    pdf := paperTexExists  -- PDF will be generated if paper.tex exists (and compiler available)
+    blueprintTex := true
+    paperWebTex := paperTexExists
+    paperPdfTex := paperTexExists && pdfCompilerAvailable
+    blueprintVerso := versoDocs.hasBlueprintSource || versoDocs.blueprintHtml.isSome
+    paperWebVerso := versoDocs.hasPaperSource || versoDocs.paperHtml.isSome
+    paperPdfVerso := versoDocs.hasPaperSource && pdfCompilerAvailable
   }
 
   -- Generate site - multi-page if chapters available, single-page otherwise
@@ -794,11 +809,11 @@ def runBuild (cliConfig : CLIConfig) : IO UInt32 := do
         depGraph := site.depGraph
         path := #[]
       }
-      let paperTemplate := Runway.DefaultTheme.primaryTemplateWithSidebar site.chapters (some "paper") availDocs
+      let paperTemplate := Runway.DefaultTheme.primaryTemplateWithSidebar site.chapters (some "paper_tex") availDocs
       let (paperHtml, _) ← paperTemplate paperContent |>.run ctx
-      let paperOutputPath := outputDir / "paper.html"
+      let paperOutputPath := outputDir / "paper_tex.html"
       IO.FS.writeFile paperOutputPath (Verso.Output.Html.doctype ++ "\n" ++ paperHtml.asString)
-      IO.println s!"  - Generated paper.html"
+      IO.println s!"  - Generated paper_tex.html"
 
       -- Generate PDF from paper.tex
       -- Generate resolved LaTeX
@@ -846,11 +861,11 @@ def runBuild (cliConfig : CLIConfig) : IO UInt32 := do
           IO.println s!"  - Generated paper.pdf"
           pdfGenerated := true
 
-          -- Generate pdf.html with embedded PDF viewer
+          -- Generate pdf_tex.html with embedded PDF viewer
           let pdfPageHtml := Runway.DefaultTheme.renderPdfPage site.chapters config availDocs
-          let pdfPageOutputPath := outputDir / "pdf.html"
+          let pdfPageOutputPath := outputDir / "pdf_tex.html"
           IO.FS.writeFile pdfPageOutputPath (Verso.Output.Html.doctype ++ "\n" ++ pdfPageHtml.asString)
-          IO.println s!"  - Generated pdf.html"
+          IO.println s!"  - Generated pdf_tex.html"
         | .compilerNotFound name =>
           IO.eprintln s!"Warning: Compiler '{name}' not found, skipping PDF generation."
         | .compilationFailed exitCode logOutput =>
@@ -1004,6 +1019,13 @@ This chapter introduces the main concepts...
   IO.FS.writeFile versoBlueprintOutputPath (Verso.Output.Html.doctype ++ "\n" ++ versoBlueprintHtml.asString)
   IO.println s!"  - Generated blueprint_verso.html"
 
+  -- Generate pdf_verso.html (placeholder for Verso PDF viewer)
+  -- The actual PDF is generated when `lake exe sbsblueprint --with-tex` is run and lualatex compiles it
+  let pdfVersoPageHtml := Runway.DefaultTheme.renderVersoPdfPage site.chapters config availDocs
+  let pdfVersoOutputPath := outputDir / "pdf_verso.html"
+  IO.FS.writeFile pdfVersoOutputPath (Verso.Output.Html.doctype ++ "\n" ++ pdfVersoPageHtml.asString)
+  IO.println s!"  - Generated pdf_verso.html"
+
   -- Log Verso document detection status
   if versoDocs.hasBlueprintSource then
     IO.println s!"  - Found Verso Blueprint source: {config.projectName}/Blueprint.lean"
@@ -1150,14 +1172,14 @@ def runPaper (cliConfig : CLIConfig) : IO UInt32 := do
       depGraph := site.depGraph
       path := #[]
     }
-    let paperTemplate := Runway.DefaultTheme.primaryTemplateWithSidebar site.chapters (some "paper")
+    let paperTemplate := Runway.DefaultTheme.primaryTemplateWithSidebar site.chapters (some "paper_tex")
     let (paperHtml, _) ← paperTemplate paperContent |>.run ctx
 
     -- Ensure output directory exists
     IO.FS.createDirAll outputDir
 
-    -- Write paper.html
-    let paperOutputPath := outputDir / "paper.html"
+    -- Write paper_tex.html
+    let paperOutputPath := outputDir / "paper_tex.html"
     IO.FS.writeFile paperOutputPath (Verso.Output.Html.doctype ++ "\n" ++ paperHtml.asString)
     IO.println s!"  - Generated {paperOutputPath}"
 
@@ -1352,10 +1374,12 @@ def showHelp : IO Unit := do
   IO.println "  -v, --version        Show version information"
   IO.println ""
   IO.println "Document Formats (auto-detected):"
-  IO.println "  LaTeX Blueprint      runway/src/blueprint.tex  -> blueprint.html"
+  IO.println "  LaTeX Blueprint      runway/src/blueprint.tex  -> index.html"
+  IO.println "  LaTeX Paper (web)    runway/src/paper.tex      -> paper_tex.html"
+  IO.println "  LaTeX Paper (pdf)    runway/src/paper.tex      -> pdf_tex.html"
   IO.println "  Verso Blueprint      {Project}/Blueprint.lean  -> blueprint_verso.html"
-  IO.println "  LaTeX Paper          runway/src/paper.tex      -> paper.html"
-  IO.println "  Verso Paper          {Project}/Paper.lean      -> paper_verso.html"
+  IO.println "  Verso Paper (web)    {Project}/Paper.lean      -> paper_verso.html"
+  IO.println "  Verso Paper (pdf)    {Project}/Paper.lean      -> pdf_verso.html"
   IO.println ""
   IO.println "Examples:"
   IO.println "  runway build                    Build site with default config"

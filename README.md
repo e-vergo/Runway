@@ -72,9 +72,9 @@ lake exe runway paper runway.json
 ```
 
 Generates:
-- `paper.html` - MathJax-rendered paper with verification badges
+- `paper_tex.html` - MathJax-rendered paper with verification badges
 - `paper.pdf` - Compiled PDF (if LaTeX compiler available)
-- `pdf.html` - PDF viewer page
+- `pdf_tex.html` - PDF viewer page
 
 Processes `\paperstatement{}`, `\paperfull{}`, and `\paperproof{}` hooks, linking to Lean declarations.
 
@@ -159,9 +159,12 @@ Create a `runway.json` file in your project root:
   index.html          # Dashboard homepage
   chapter-*.html      # Chapter pages
   dep_graph.html      # Dependency graph page
-  paper.html          # Paper (if configured)
-  pdf.html            # PDF viewer (if configured)
+  paper_tex.html      # TeX Paper (if configured)
+  pdf_tex.html        # TeX PDF viewer (if configured)
   paper.pdf           # PDF (if configured)
+  blueprint_verso.html  # Verso Blueprint (if configured)
+  paper_verso.html    # Verso Paper (if configured)
+  pdf_verso.html      # Verso PDF viewer (if configured)
   manifest.json       # Copied from Dress
   assets/
     blueprint.css

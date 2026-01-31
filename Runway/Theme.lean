@@ -91,39 +91,37 @@ def renderSidebar (chapters : Array ChapterInfo) (currentSlug : Option String) (
     .tag "a" #[("href", s!"{toRoot}dep_graph.html")] (Html.text true "Dependency Graph")
   )
 
-  -- Build document links based on what's available
-  let docItems : Array Html := Id.run do
-    let mut items : Array Html := #[]
-
-    -- Verso Blueprint link (if available)
-    if availDocs.blueprintVerso then
-      let cls := if currentSlug == some "blueprint_verso" then "active" else ""
-      items := items.push <| .tag "li" #[("class", cls)] (
-        .tag "a" #[("href", s!"{toRoot}blueprint_verso.html")] (Html.text true "Blueprint (Verso)")
+  -- Helper to create a sidebar document item (enabled or disabled)
+  let mkDocItem (label : String) (href : String) (slug : String) (available : Bool) : Html :=
+    if available then
+      let cls := if currentSlug == some slug then "active" else ""
+      .tag "li" #[("class", cls)] (
+        .tag "a" #[("href", s!"{toRoot}{href}"), ("class", "sidebar-item")] (Html.text true label)
+      )
+    else
+      .tag "li" #[] (
+        .tag "span" #[("class", "sidebar-item disabled")] (Html.text true label)
       )
 
-    -- Paper link (LaTeX web version, if available)
-    if availDocs.paper then
-      let cls := if currentSlug == some "paper" then "active" else ""
-      items := items.push <| .tag "li" #[("class", cls)] (
-        .tag "a" #[("href", s!"{toRoot}paper.html")] (Html.text true "Paper")
-      )
+  -- TeX Documents section header
+  let texHeader := .tag "li" #[("class", "nav-section-header")] (Html.text true "TeX Documents")
 
-    -- Verso Paper link (if available)
-    if availDocs.paperVerso then
-      let cls := if currentSlug == some "paper_verso" then "active" else ""
-      items := items.push <| .tag "li" #[("class", cls)] (
-        .tag "a" #[("href", s!"{toRoot}paper_verso.html")] (Html.text true "Paper (Verso)")
-      )
+  -- TeX document items (always show all 3, disabled if unavailable)
+  let texBlueprint := mkDocItem "Blueprint [TeX]" "index.html" "" availDocs.blueprintTex
+  let texPaperWeb := mkDocItem "Paper_web [TeX]" "paper_tex.html" "paper_tex" availDocs.paperWebTex
+  let texPaperPdf := mkDocItem "Paper_pdf [TeX]" "pdf_tex.html" "pdf_tex" availDocs.paperPdfTex
 
-    -- PDF link (if available)
-    if availDocs.pdf then
-      let cls := if currentSlug == some "pdf" then "active" else ""
-      items := items.push <| .tag "li" #[("class", cls)] (
-        .tag "a" #[("href", s!"{toRoot}pdf.html")] (Html.text true "Paper [pdf]")
-      )
+  -- Verso Documents section header
+  let versoHeader := .tag "li" #[("class", "nav-section-header")] (Html.text true "Verso Documents")
 
-    return items
+  -- Verso document items (always show all 3, disabled if unavailable)
+  let versoBlueprint := mkDocItem "Blueprint [Verso]" "blueprint_verso.html" "blueprint_verso" availDocs.blueprintVerso
+  let versoPaperWeb := mkDocItem "Paper_web [Verso]" "paper_verso.html" "paper_verso" availDocs.paperWebVerso
+  let versoPaperPdf := mkDocItem "Paper_pdf [Verso]" "pdf_verso.html" "pdf_verso" availDocs.paperPdfVerso
+
+  -- Build document items array with section headers
+  let docItems : Array Html := #[texHeader, texBlueprint, texPaperWeb, texPaperPdf,
+                                  versoHeader, versoBlueprint, versoPaperWeb, versoPaperPdf]
 
   -- External links (GitHub, API Docs)
   let githubItem := match config.githubUrl with
@@ -141,9 +139,9 @@ def renderSidebar (chapters : Array ChapterInfo) (currentSlug : Option String) (
     .tag "span" #[("class", "theme-toggle-icon moon")] (Html.text true "☾")
   )
 
-  -- Build final nav items: home, chapters, separator, graph, docs (if any), separator, external links
-  let navItems := #[homeItem] ++ chapterItems ++ #[separator, graphItem] ++
-    (if docItems.isEmpty then #[] else docItems) ++
+  -- Build final nav items: home, chapters, separator, graph, separator, documents, separator, external links
+  let navItems := #[homeItem] ++ chapterItems ++ #[separator, graphItem, separator] ++
+    docItems ++
     #[separator, githubItem, docsItem]
 
   .tag "nav" #[("class", "toc")] (
@@ -366,6 +364,114 @@ def renderPdfPage (chapters : Array ChapterInfo) (config : Config) (availDocs : 
       .tag "meta" #[("charset", "UTF-8")] Html.empty ++
       .tag "meta" #[("name", "viewport"), ("content", "width=device-width, initial-scale=1")] Html.empty ++
       .tag "title" #[] (Html.text true (config.title ++ " - PDF")) ++
+      -- Local CSS
+      .tag "link" #[("rel", "stylesheet"), ("href", s!"{toRoot}assets/common.css")] Html.empty ++
+      .tag "link" #[("rel", "stylesheet"), ("href", s!"{toRoot}assets/blueprint.css")] Html.empty ++
+      .tag "link" #[("rel", "icon"), ("href", "data:,")] Html.empty ++
+      -- Inline styles for PDF page
+      .tag "style" #[] (Html.text false "
+        .pdf-viewer-container {
+          padding: 1rem;
+        }
+        .pdf-viewer-container h1 {
+          margin-bottom: 0.5rem;
+        }
+        .pdf-description {
+          color: #666;
+          margin-bottom: 1rem;
+        }
+        .pdf-actions {
+          margin-bottom: 1rem;
+        }
+        .pdf-download-btn {
+          display: inline-block;
+          padding: 0.5rem 1rem;
+          background: #007bff;
+          color: white;
+          text-decoration: none;
+          border-radius: 4px;
+        }
+        .pdf-download-btn:hover {
+          background: #0056b3;
+        }
+        .pdf-embed {
+          border: 1px solid #ddd;
+          border-radius: 4px;
+        }
+        .pdf-fallback {
+          margin-top: 1rem;
+          color: #666;
+          font-size: 0.9rem;
+        }
+      ") ++
+      mathjaxConfig ++
+      .tag "script" #[("id", "MathJax-script"), ("async", ""),
+                      ("src", "https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js")] Html.empty
+    ) ++
+    .tag "body" #[] (
+      -- Header
+      .tag "header" #[] (
+        .tag "nav" #[("class", "header")] (
+          divClass "nav-wrapper" (
+            .tag "span" #[("id", "toc-toggle")] (Html.text true "☰")
+          )
+        )
+      ) ++
+      -- Main wrapper with sidebar and content
+      divClass "wrapper" (
+        sidebar ++
+        divClass "content" pdfContent
+      ) ++
+      -- jQuery (for sidebar toggle)
+      .tag "script" #[("src", "https://code.jquery.com/jquery-3.7.1.min.js"),
+                      ("integrity", "sha256-/JqT3SQfawRcv/BIHPThkBvs0OEvtFFmqPF/lYI/Cxo="),
+                      ("crossorigin", "anonymous")] Html.empty ++
+      -- Local JavaScript
+      .tag "script" #[("src", s!"{toRoot}assets/plastex.js")] Html.empty ++
+      .tag "script" #[("src", s!"{toRoot}assets/verso-code.js")] Html.empty
+    )
+  )
+
+/-- Render full-page PDF viewer for Verso-generated PDFs -/
+def renderVersoPdfPage (chapters : Array ChapterInfo) (config : Config) (availDocs : AvailableDocuments := {}) : Html :=
+  let toRoot := ""
+
+  -- MathJax configuration script (with macros from blueprint.tex for consistency)
+  let mathjaxConfig := .tag "script" #[] (Html.text false (Macros.generateMathJaxConfig config.mathjaxMacrosJson))
+
+  -- Build sidebar
+  let sidebar := renderSidebar chapters (some "pdf_verso") toRoot config availDocs
+
+  -- PDF viewer content
+  let pdfContent := divClass "pdf-viewer-container" (
+    .tag "h1" #[] (Html.text true "Verso PDF Document") ++
+    .tag "p" #[("class", "pdf-description")] (
+      Html.text true "View or download the PDF compiled from Verso source."
+    ) ++
+    .tag "div" #[("class", "pdf-actions")] (
+      .tag "a" #[("href", "paper_verso.pdf"), ("download", ""), ("class", "pdf-download-btn")] (
+        Html.text true "Download PDF"
+      )
+    ) ++
+    .tag "embed" #[
+      ("src", "paper_verso.pdf"),
+      ("type", "application/pdf"),
+      ("width", "100%"),
+      ("height", "800px"),
+      ("class", "pdf-embed")
+    ] Html.empty ++
+    .tag "p" #[("class", "pdf-fallback")] (
+      Html.text true "If the PDF does not display, you can " ++
+      .tag "a" #[("href", "paper_verso.pdf")] (Html.text true "download it directly") ++
+      Html.text true "."
+    )
+  )
+
+  .tag "html" #[("lang", "en")] (
+    .tag "head" #[] (
+      .tag "meta" #[("charset", "UTF-8")] Html.empty ++
+      .tag "meta" #[("name", "viewport"), ("content", "width=device-width, initial-scale=1")] Html.empty ++
+      .tag "title" #[] (Html.text true (config.title ++ " - Verso PDF")) ++
       -- Local CSS
       .tag "link" #[("rel", "stylesheet"), ("href", s!"{toRoot}assets/common.css")] Html.empty ++
       .tag "link" #[("rel", "stylesheet"), ("href", s!"{toRoot}assets/blueprint.css")] Html.empty ++

@@ -395,35 +395,36 @@ private def renderDepGraphSidebar (chapters : Array ChapterInfo) (toRoot : Strin
     .tag "a" #[("href", s!"{toRoot}dep_graph.html")] (Html.text true "Dependency Graph")
   )
 
-  -- Build document links based on what's available
-  let docItems : Array Html := Id.run do
-    let mut items : Array Html := #[]
-
-    -- Verso Blueprint link (if available)
-    if availDocs.blueprintVerso then
-      items := items.push <| .tag "li" #[] (
-        .tag "a" #[("href", s!"{toRoot}blueprint_verso.html")] (Html.text true "Blueprint (Verso)")
+  -- Helper to create a sidebar document item (enabled or disabled)
+  let mkDocItem (label : String) (href : String) (available : Bool) : Html :=
+    if available then
+      .tag "li" #[] (
+        .tag "a" #[("href", s!"{toRoot}{href}"), ("class", "sidebar-item")] (Html.text true label)
+      )
+    else
+      .tag "li" #[] (
+        .tag "span" #[("class", "sidebar-item disabled")] (Html.text true label)
       )
 
-    -- Paper link (LaTeX web version, if available)
-    if availDocs.paper then
-      items := items.push <| .tag "li" #[] (
-        .tag "a" #[("href", s!"{toRoot}paper.html")] (Html.text true "Paper")
-      )
+  -- TeX Documents section header
+  let texHeader := .tag "li" #[("class", "nav-section-header")] (Html.text true "TeX Documents")
 
-    -- Verso Paper link (if available)
-    if availDocs.paperVerso then
-      items := items.push <| .tag "li" #[] (
-        .tag "a" #[("href", s!"{toRoot}paper_verso.html")] (Html.text true "Paper (Verso)")
-      )
+  -- TeX document items (always show all 3, disabled if unavailable)
+  let texBlueprint := mkDocItem "Blueprint [TeX]" "index.html" availDocs.blueprintTex
+  let texPaperWeb := mkDocItem "Paper_web [TeX]" "paper_tex.html" availDocs.paperWebTex
+  let texPaperPdf := mkDocItem "Paper_pdf [TeX]" "pdf_tex.html" availDocs.paperPdfTex
 
-    -- PDF link (if available)
-    if availDocs.pdf then
-      items := items.push <| .tag "li" #[] (
-        .tag "a" #[("href", s!"{toRoot}pdf.html")] (Html.text true "Paper [pdf]")
-      )
+  -- Verso Documents section header
+  let versoHeader := .tag "li" #[("class", "nav-section-header")] (Html.text true "Verso Documents")
 
-    return items
+  -- Verso document items (always show all 3, disabled if unavailable)
+  let versoBlueprint := mkDocItem "Blueprint [Verso]" "blueprint_verso.html" availDocs.blueprintVerso
+  let versoPaperWeb := mkDocItem "Paper_web [Verso]" "paper_verso.html" availDocs.paperWebVerso
+  let versoPaperPdf := mkDocItem "Paper_pdf [Verso]" "pdf_verso.html" availDocs.paperPdfVerso
+
+  -- Build document items array with section headers
+  let docItems : Array Html := #[texHeader, texBlueprint, texPaperWeb, texPaperPdf,
+                                  versoHeader, versoBlueprint, versoPaperWeb, versoPaperPdf]
 
   -- External links (GitHub, API Docs)
   let githubItem := match config.githubUrl with
@@ -441,9 +442,9 @@ private def renderDepGraphSidebar (chapters : Array ChapterInfo) (toRoot : Strin
     .tag "span" #[("class", "theme-toggle-icon moon")] (Html.text true "☾")
   )
 
-  -- Build final nav items: home, chapters, separator, graph, docs (if any), separator, external links
-  let navItems := #[homeItem] ++ chapterItems ++ #[separator, graphItem] ++
-    (if docItems.isEmpty then #[] else docItems) ++
+  -- Build final nav items: home, chapters, separator, graph, separator, documents, separator, external links
+  let navItems := #[homeItem] ++ chapterItems ++ #[separator, graphItem, separator] ++
+    docItems ++
     #[separator, githubItem, docsItem]
 
   .tag "nav" #[("class", "toc")] (
