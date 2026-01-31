@@ -67,11 +67,11 @@ namespace DefaultTheme
 
 /-- Check if current page is a blueprint page (TeX or Verso) -/
 def isBlueprintPage (currentSlug : Option String) (chapters : Array ChapterInfo) : Bool :=
-  -- Dashboard (none) is a blueprint page
+  -- Dashboard (none) is NOT a blueprint page - it shouldn't show the chapter panel
   -- Chapter pages are blueprint pages
   -- Blueprint [TeX] (slug "") and Blueprint [Verso] are blueprint pages
   match currentSlug with
-  | none => true  -- Dashboard
+  | none => false  -- Dashboard - no chapter panel
   | some "dep_graph" => false
   | some "paper_tex" => false
   | some "pdf_tex" => false

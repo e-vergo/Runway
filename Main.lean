@@ -714,14 +714,16 @@ def runBuild (cliConfig : CLIConfig) : IO UInt32 := do
   -- 3. paperPdfTex: True if paper.tex exists AND PDF compiler available (paper.pdf + pdf_tex.html will be generated)
   -- 4. blueprintVerso: True if Blueprint.lean source exists (placeholder or actual output will be present)
   -- 5. paperWebVerso: True if Paper.lean source exists (placeholder or actual output will be present)
-  -- 6. paperPdfVerso: True if Paper.lean source exists AND PDF compiler available (pdf_verso.html will be useful)
+  -- 6. paperPdfVerso: Currently always false (Verso LaTeX export not yet implemented)
   let availDocs : AvailableDocuments := {
     blueprintTex := true
     paperWebTex := paperTexExists
     paperPdfTex := paperTexExists && pdfCompilerAvailable
     blueprintVerso := versoDocs.hasBlueprintSource || versoDocs.blueprintHtml.isSome
     paperWebVerso := versoDocs.hasPaperSource || versoDocs.paperHtml.isSome
-    paperPdfVerso := versoDocs.hasPaperSource && pdfCompilerAvailable
+    -- TODO: Set to true when Verso LaTeX export is implemented
+    -- Currently Verso cannot export to LaTeX, so PDF generation is not possible
+    paperPdfVerso := false
   }
 
   -- Generate site - multi-page if chapters available, single-page otherwise
@@ -1036,12 +1038,11 @@ This chapter introduces the main concepts...
   IO.FS.writeFile versoBlueprintOutputPath (Verso.Output.Html.doctype ++ "\n" ++ versoBlueprintHtml.asString)
   IO.println s!"  - Generated blueprint_verso.html"
 
-  -- Generate pdf_verso.html (placeholder for Verso PDF viewer)
-  -- The actual PDF is generated when `lake exe sbsblueprint --with-tex` is run and lualatex compiles it
-  let pdfVersoPageHtml := Runway.DefaultTheme.renderVersoPdfPage site.chapters config availDocs
-  let pdfVersoOutputPath := outputDir / "pdf_verso.html"
-  IO.FS.writeFile pdfVersoOutputPath (Verso.Output.Html.doctype ++ "\n" ++ pdfVersoPageHtml.asString)
-  IO.println s!"  - Generated pdf_verso.html"
+  -- NOTE: pdf_verso.html generation is skipped until Verso LaTeX export is implemented.
+  -- When implemented, this section should:
+  -- 1. Export Paper.lean to LaTeX
+  -- 2. Compile LaTeX to paper_verso.pdf
+  -- 3. Generate pdf_verso.html with the PDF embed
 
   -- Log Verso document detection status
   if versoDocs.hasBlueprintSource then
@@ -1171,6 +1172,28 @@ def runPaper (cliConfig : CLIConfig) : IO UInt32 := do
     let site ← buildSiteFromArtifacts config dressedDir
     IO.println s!"  - Loaded {site.nodes.size} nodes from artifacts"
 
+    -- Detect available documents for sidebar (same logic as runBuild)
+    -- 1. paperTexExists is true (we already validated texPath exists above)
+    -- 2. Detect Verso documents
+    let projectRoot := cliConfig.configPath.parent.getD "."
+    let versoDocs ← detectVersoDocuments cliConfig.buildDir config.projectName projectRoot
+    -- 3. Detect PDF compiler availability
+    let pdfCompilerAvailable ← do
+      match config.pdfCompiler with
+      | some compStr => pure (Runway.Pdf.Compiler.fromString? compStr).isSome
+      | none =>
+        let detected ← Runway.Pdf.detectCompiler
+        pure detected.isSome
+    -- 4. Build AvailableDocuments
+    let availDocs : AvailableDocuments := {
+      blueprintTex := true
+      paperWebTex := true  -- We know paper.tex exists (validated above)
+      paperPdfTex := pdfCompilerAvailable
+      blueprintVerso := versoDocs.hasBlueprintSource || versoDocs.blueprintHtml.isSome
+      paperWebVerso := versoDocs.hasPaperSource || versoDocs.paperHtml.isSome
+      paperPdfVerso := false  -- Verso LaTeX export not yet implemented
+    }
+
     -- Build artifact map from nodes
     let mut artifacts : HashMap String NodeInfo := {}
     for node in site.nodes do
@@ -1189,7 +1212,7 @@ def runPaper (cliConfig : CLIConfig) : IO UInt32 := do
       depGraph := site.depGraph
       path := #[]
     }
-    let paperTemplate := Runway.DefaultTheme.primaryTemplateWithSidebar site.chapters (some "paper_tex")
+    let paperTemplate := Runway.DefaultTheme.primaryTemplateWithSidebar site.chapters (some "paper_tex") availDocs
     let (paperHtml, _) ← paperTemplate paperContent |>.run ctx
 
     -- Ensure output directory exists
