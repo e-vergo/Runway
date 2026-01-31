@@ -464,7 +464,8 @@ def Theme.renderSite (theme : Theme) (site : BlueprintSite) : RenderM Html := do
 
 
 /-- Generate complete site with theme -/
-def generateSite (theme : Theme) (site : BlueprintSite) (outputDir : System.FilePath) : IO Unit := do
+def generateSite (theme : Theme) (site : BlueprintSite) (outputDir : System.FilePath)
+    (availDocs : AvailableDocuments := {}) : IO Unit := do
   -- Create output directory
   IO.FS.createDirAll outputDir
 
@@ -488,7 +489,7 @@ def generateSite (theme : Theme) (site : BlueprintSite) (outputDir : System.File
 
   -- Generate dedicated dependency graph page with rich modals and sidebar
   let (modalsHtml, _) ← renderAllModals site.nodes |>.run ctx
-  let depGraphPage := DepGraph.fullPageGraph site.depGraphSvg site.depGraphJson (some modalsHtml) site.config.title site.chapters (some site.config)
+  let depGraphPage := DepGraph.fullPageGraph site.depGraphSvg site.depGraphJson (some modalsHtml) site.config.title site.chapters (some site.config) availDocs
   let depGraphHtmlStr := Html.doctype ++ "\n" ++ depGraphPage.asString
   IO.FS.writeFile (outputDir / "dep_graph.html") depGraphHtmlStr
 

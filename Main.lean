@@ -684,13 +684,31 @@ def runBuild (cliConfig : CLIConfig) : IO UInt32 := do
   -- Generate HTML output
   IO.FS.createDirAll outputDir
 
+  -- Detect which documents will be available for sidebar links
+  -- We need to determine this BEFORE generating the site so the sidebar is correct
+  let paperTexExists ← match config.paperTexPath with
+    | none => pure false
+    | some texPathStr => (texPathStr : FilePath).pathExists
+
+  -- Detect Verso documents (Blueprint.lean, Paper.lean sources)
+  let versoDocs ← detectVersoDocuments cliConfig.buildDir config.projectName
+
+  -- Build AvailableDocuments based on what will be generated
+  let availDocs : AvailableDocuments := {
+    blueprint := true  -- LaTeX blueprint is always generated from blueprint.tex
+    blueprintVerso := versoDocs.blueprintHtml.isSome || versoDocs.hasBlueprintSource  -- Verso Blueprint output exists or source exists (placeholder generated)
+    paper := paperTexExists  -- LaTeX paper will be generated if paper.tex exists
+    paperVerso := versoDocs.paperHtml.isSome || versoDocs.hasPaperSource  -- Verso Paper output exists or source exists (placeholder generated)
+    pdf := paperTexExists  -- PDF will be generated if paper.tex exists (and compiler available)
+  }
+
   -- Generate site - multi-page if chapters available, single-page otherwise
   if site.chapters.isEmpty then
     -- Single-page mode (original behavior)
-    generateSite defaultTheme site outputDir
+    generateSite defaultTheme site outputDir availDocs
   else
     -- Multi-page mode with chapter pages
-    generateMultiPageSite defaultTheme site outputDir
+    generateMultiPageSite defaultTheme site outputDir availDocs
 
   -- Copy assets from config.assetsDir to output
   let assetsOutputDir := outputDir / "assets"
@@ -776,7 +794,7 @@ def runBuild (cliConfig : CLIConfig) : IO UInt32 := do
         depGraph := site.depGraph
         path := #[]
       }
-      let paperTemplate := Runway.DefaultTheme.primaryTemplateWithSidebar site.chapters (some "paper")
+      let paperTemplate := Runway.DefaultTheme.primaryTemplateWithSidebar site.chapters (some "paper") availDocs
       let (paperHtml, _) ← paperTemplate paperContent |>.run ctx
       let paperOutputPath := outputDir / "paper.html"
       IO.FS.writeFile paperOutputPath (Verso.Output.Html.doctype ++ "\n" ++ paperHtml.asString)
@@ -829,7 +847,7 @@ def runBuild (cliConfig : CLIConfig) : IO UInt32 := do
           pdfGenerated := true
 
           -- Generate pdf.html with embedded PDF viewer
-          let pdfPageHtml := Runway.DefaultTheme.renderPdfPage site.chapters config
+          let pdfPageHtml := Runway.DefaultTheme.renderPdfPage site.chapters config availDocs
           let pdfPageOutputPath := outputDir / "pdf.html"
           IO.FS.writeFile pdfPageOutputPath (Verso.Output.Html.doctype ++ "\n" ++ pdfPageHtml.asString)
           IO.println s!"  - Generated pdf.html"
@@ -905,17 +923,88 @@ Some prose text explaining the theorem...
     depGraph := site.depGraph
     path := #[]
   }
-  let versoPaperTemplate := Runway.DefaultTheme.primaryTemplateWithSidebar site.chapters (some "verso_paper")
+  let versoPaperTemplate := Runway.DefaultTheme.primaryTemplateWithSidebar site.chapters (some "verso_paper") availDocs
   let (versoPaperHtml, _) ← versoPaperTemplate versoPaperContent |>.run versoPaperCtx
   let versoPaperOutputPath := outputDir / "verso_paper.html"
   IO.FS.writeFile versoPaperOutputPath (Verso.Output.Html.doctype ++ "\n" ++ versoPaperHtml.asString)
   IO.println s!"  - Generated verso_paper.html"
 
-  -- Detect and integrate Verso document outputs
-  IO.println "  Checking for Verso document outputs..."
-  let versoDocs ← detectVersoDocuments cliConfig.buildDir config.projectName
+  -- Generate blueprint_verso.html (Verso-authored blueprint page)
+  let versoBlueprintContent := Verso.Output.Html.tag "div" #[("class", "verso-blueprint-page")] (
+    Verso.Output.Html.tag "h1" #[] (Verso.Output.Html.text true "Verso Blueprint") ++
+    Verso.Output.Html.tag "p" #[("class", "verso-blueprint-intro")] (
+      Verso.Output.Html.text true "This page displays blueprints authored in Verso format. Verso blueprints are type-checked Lean documents that can embed formal statements and proofs directly."
+    ) ++
+    Verso.Output.Html.tag "h2" #[] (Verso.Output.Html.text true "Usage") ++
+    Verso.Output.Html.tag "p" #[] (
+      Verso.Output.Html.text true "To create a Verso blueprint, add a " ++
+      Verso.Output.Html.tag "code" #[] (Verso.Output.Html.text true "Blueprint.lean") ++
+      Verso.Output.Html.text true " file to your project using the VersoBlueprint genre:"
+    ) ++
+    Verso.Output.Html.tag "pre" #[("class", "verso-example")] (
+      Verso.Output.Html.tag "code" #[] (Verso.Output.Html.text true
+"import VersoBlueprint
 
-  -- Log detection status
+open Verso.Genre.Blueprint
+
+#doc (Blueprint) \"My Blueprint Title\" =>
+
+:::chapter \"Introduction\"
+
+This chapter introduces the main concepts...
+
+:::blueprintFull \"thm:main\"
+
+:::leanModule \"MyProject.Theorems\"")
+    ) ++
+    Verso.Output.Html.tag "h2" #[] (Verso.Output.Html.text true "Available Blocks") ++
+    Verso.Output.Html.tag "ul" #[] (
+      Verso.Output.Html.tag "li" #[] (
+        Verso.Output.Html.tag "code" #[] (Verso.Output.Html.text true ":::chapter \"Title\"") ++
+        Verso.Output.Html.text true " - Create a new chapter"
+      ) ++
+      Verso.Output.Html.tag "li" #[] (
+        Verso.Output.Html.tag "code" #[] (Verso.Output.Html.text true ":::section \"Title\"") ++
+        Verso.Output.Html.text true " - Create a section within a chapter"
+      ) ++
+      Verso.Output.Html.tag "li" #[] (
+        Verso.Output.Html.tag "code" #[] (Verso.Output.Html.text true ":::blueprintStatement \"label\"") ++
+        Verso.Output.Html.text true " - Insert the LaTeX statement with a link to Lean code"
+      ) ++
+      Verso.Output.Html.tag "li" #[] (
+        Verso.Output.Html.tag "code" #[] (Verso.Output.Html.text true ":::blueprintFull \"label\"") ++
+        Verso.Output.Html.text true " - Insert the full side-by-side display"
+      ) ++
+      Verso.Output.Html.tag "li" #[] (
+        Verso.Output.Html.tag "code" #[] (Verso.Output.Html.text true ":::leanNode \"label\"") ++
+        Verso.Output.Html.text true " - Insert a single Lean node"
+      ) ++
+      Verso.Output.Html.tag "li" #[] (
+        Verso.Output.Html.tag "code" #[] (Verso.Output.Html.text true ":::leanModule \"ModuleName\"") ++
+        Verso.Output.Html.text true " - Insert all nodes from a module"
+      )
+    ) ++
+    Verso.Output.Html.tag "h2" #[] (Verso.Output.Html.text true "Building") ++
+    Verso.Output.Html.tag "p" #[] (
+      Verso.Output.Html.text true "After creating your Blueprint.lean file, build it with:" ++
+      Verso.Output.Html.tag "pre" #[("class", "verso-example")] (
+        Verso.Output.Html.tag "code" #[] (Verso.Output.Html.text true "lake build {ProjectName}:blueprint")
+      ) ++
+      Verso.Output.Html.text true "The generated HTML will replace this placeholder page."
+    )
+  )
+  let versoBlueprintCtx : Runway.Render.Context := {
+    config := config
+    depGraph := site.depGraph
+    path := #[]
+  }
+  let versoBlueprintTemplate := Runway.DefaultTheme.primaryTemplateWithSidebar site.chapters (some "blueprint_verso") availDocs
+  let (versoBlueprintHtml, _) ← versoBlueprintTemplate versoBlueprintContent |>.run versoBlueprintCtx
+  let versoBlueprintOutputPath := outputDir / "blueprint_verso.html"
+  IO.FS.writeFile versoBlueprintOutputPath (Verso.Output.Html.doctype ++ "\n" ++ versoBlueprintHtml.asString)
+  IO.println s!"  - Generated blueprint_verso.html"
+
+  -- Log Verso document detection status
   if versoDocs.hasBlueprintSource then
     IO.println s!"  - Found Verso Blueprint source: {config.projectName}/Blueprint.lean"
   if versoDocs.hasPaperSource then
