@@ -784,6 +784,16 @@ def runBuild (cliConfig : CLIConfig) : IO UInt32 := do
     IO.println s!"  - Copied {srcPaperCss} to {dstPaperCss}"
   -- paper.css is optional, so no error if not found
 
+  -- Copy dep_graph.css (required - for dependency graph page)
+  let srcDepGraphCss := config.assetsDir / "dep_graph.css"
+  let dstDepGraphCss := assetsOutputDir / "dep_graph.css"
+  if ← srcDepGraphCss.pathExists then
+    let depGraphCssContent ← IO.FS.readFile srcDepGraphCss
+    IO.FS.writeFile dstDepGraphCss depGraphCssContent
+    IO.println s!"  - Copied {srcDepGraphCss} to {dstDepGraphCss}"
+  else
+    throw <| IO.userError s!"ERROR: Required asset file not found: {srcDepGraphCss}"
+
   IO.println s!"Site generated at {outputDir}"
   IO.println s!"  - {site.nodes.size} nodes"
   IO.println s!"  - {site.depGraph.edges.size} dependency edges"
