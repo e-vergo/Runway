@@ -372,7 +372,7 @@ def wrapInModal (nodeId : String) (sbsContent : Html) (linkUrl : String)
 
 /-! ## Full Page Generation -/
 
-/-- Render sidebar navigation for the dependency graph page.
+/-- Render sidebar navigation for the dependency graph page (static, no dropdowns).
     Duplicated from Theme.lean to avoid circular imports. -/
 private def renderDepGraphSidebar (_chapters : Array ChapterInfo) (toRoot : String) (config : Config) (availDocs : AvailableDocuments := {}) : Html :=
   -- Dashboard

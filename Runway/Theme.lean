@@ -65,7 +65,42 @@ structure Theme where
 
 namespace DefaultTheme
 
-/-- Render sidebar navigation -/
+/-- Check if current page is a blueprint page (TeX or Verso) -/
+def isBlueprintPage (currentSlug : Option String) (chapters : Array ChapterInfo) : Bool :=
+  -- Dashboard (none) is a blueprint page
+  -- Chapter pages are blueprint pages
+  -- Blueprint [TeX] (slug "") and Blueprint [Verso] are blueprint pages
+  match currentSlug with
+  | none => true  -- Dashboard
+  | some "dep_graph" => false
+  | some "paper_tex" => false
+  | some "pdf_tex" => false
+  | some "paper_verso" => false
+  | some "pdf_verso" => false
+  | some slug =>
+    -- Check if it's a chapter page
+    chapters.any (·.slug == slug) || slug == "" || slug == "blueprint_verso"
+
+/-- Render chapter panel (shown to the right of sidebar for blueprint pages) -/
+def renderChapterPanel (chapters : Array ChapterInfo) (currentSlug : Option String) (toRoot : String) : Html :=
+  if chapters.isEmpty then Html.empty
+  else
+    let chapterItems := chapters.map fun chap =>
+      let chapterLabel := if chap.isAppendix
+        then s!"Appendix: {chap.title}"
+        else s!"Ch {chap.number}: {chap.title}"
+      let isActive := currentSlug == some chap.slug
+      let cls := if isActive then "chapter-panel-item active" else "chapter-panel-item"
+      .tag "li" #[] (
+        .tag "a" #[("href", s!"{toRoot}{chap.slug}.html"), ("class", cls)] (Html.text true chapterLabel)
+      )
+
+    .tag "nav" #[("class", "chapter-panel")] (
+      .tag "div" #[("class", "chapter-panel-header")] (Html.text true "Chapters") ++
+      .tag "ul" #[("class", "chapter-panel-list")] (.seq chapterItems)
+    )
+
+/-- Render sidebar navigation (static, no dropdowns) -/
 def renderSidebar (chapters : Array ChapterInfo) (currentSlug : Option String) (toRoot : String) (config : Config) (availDocs : AvailableDocuments := {}) : Html :=
   -- Dashboard (renamed from "Blueprint Home")
   let dashboardClass := if currentSlug.isNone then "sidebar-item active" else "sidebar-item"
@@ -98,51 +133,15 @@ def renderSidebar (chapters : Array ChapterInfo) (currentSlug : Option String) (
         .tag "span" #[("class", "sidebar-item disabled")] (Html.text true label)
       )
 
-  -- Helper to create an expandable sidebar document item with nested chapter list
-  let mkExpandableDocItem (label : String) (href : String) (slug : String) (available : Bool) (docId : String) (chapterItems : Array Html) : Html :=
-    if available then
-      let isActive := currentSlug == some slug
-      let cls := if isActive then "sidebar-item active" else "sidebar-item"
-      -- Expandable item with arrow, link, and nested chapter list
-      .tag "li" #[("class", "sidebar-item expandable")] (
-        .tag "div" #[("class", "item-header")] (
-          .tag "span" #[("class", "expand-arrow"), ("onclick", "toggleExpand(this)")] (Html.text true "▶") ++
-          .tag "a" #[("href", s!"{toRoot}{href}"), ("class", cls)] (Html.text true label)
-        ) ++
-        .tag "ul" #[("class", "chapter-list collapsed"), ("data-doc", docId)] (
-          .seq chapterItems
-        )
-      )
-    else
-      -- Disabled items don't need expand functionality
-      .tag "li" #[] (
-        .tag "span" #[("class", "sidebar-item disabled")] (Html.text true label)
-      )
-
-  -- Build chapter list items for Blueprint [TeX]
-  let blueprintChapterItems := chapters.map fun chap =>
-    let chapterLabel := if chap.isAppendix
-      then s!"Appendix: {chap.title}"
-      else s!"Ch {chap.number}: {chap.title}"
-    .tag "li" #[] (
-      .tag "a" #[("href", s!"{toRoot}{chap.slug}.html")] (Html.text true chapterLabel)
-    )
-
-  -- TeX document items (Paper_web, Paper_pdf, Blueprint with chapters)
+  -- TeX document items (Paper_web, Paper_pdf, Blueprint)
   let texPaperWeb := mkDocItem "Paper_web [TeX]" "paper_tex.html" "paper_tex" availDocs.paperWebTex
   let texPaperPdf := mkDocItem "Paper_pdf [TeX]" "pdf_tex.html" "pdf_tex" availDocs.paperPdfTex
-  -- Blueprint [TeX] is expandable with chapter list
-  let texBlueprint := if chapters.isEmpty
-    then mkDocItem "Blueprint [TeX]" "index.html" "" availDocs.blueprintTex
-    else mkExpandableDocItem "Blueprint [TeX]" "index.html" "" availDocs.blueprintTex "blueprint-tex" blueprintChapterItems
+  let texBlueprint := mkDocItem "Blueprint [TeX]" "index.html" "" availDocs.blueprintTex
 
   -- Verso document items (Paper_web, Paper_pdf, Blueprint)
   let versoPaperWeb := mkDocItem "Paper_web [Verso]" "paper_verso.html" "paper_verso" availDocs.paperWebVerso
   let versoPaperPdf := mkDocItem "Paper_pdf [Verso]" "pdf_verso.html" "pdf_verso" availDocs.paperPdfVerso
-  -- Blueprint [Verso] is expandable with chapter list (same chapters as TeX)
-  let versoBlueprint := if chapters.isEmpty
-    then mkDocItem "Blueprint [Verso]" "blueprint_verso.html" "blueprint_verso" availDocs.blueprintVerso
-    else mkExpandableDocItem "Blueprint [Verso]" "blueprint_verso.html" "blueprint_verso" availDocs.blueprintVerso "blueprint-verso" blueprintChapterItems
+  let versoBlueprint := mkDocItem "Blueprint [Verso]" "blueprint_verso.html" "blueprint_verso" availDocs.blueprintVerso
 
   -- External links (API Docs, GitHub)
   let docsItem := match config.docgen4Url with
@@ -165,7 +164,7 @@ def renderSidebar (chapters : Array ChapterInfo) (currentSlug : Option String) (
 
   -- Build nav items in new order:
   -- Dashboard, Dependency Graph, separator
-  -- Paper_web [TeX], Paper_pdf [TeX], Blueprint [TeX] (with chapters)
+  -- Paper_web [TeX], Paper_pdf [TeX], Blueprint [TeX]
   -- Paper_web [Verso], Paper_pdf [Verso], Blueprint [Verso]
   -- separator, API Docs, GitHub
   -- spacer (flex grow)
@@ -286,6 +285,12 @@ def primaryTemplateWithSidebar (chapters : Array ChapterInfo) (currentSlug : Opt
   -- Build sidebar
   let sidebar := renderSidebar chapters currentSlug toRoot config availDocs
 
+  -- Build chapter panel (only visible for blueprint pages)
+  let showChapterPanel := isBlueprintPage currentSlug chapters
+  let chapterPanel := if showChapterPanel
+    then renderChapterPanel chapters currentSlug toRoot
+    else Html.empty
+
   -- Build prev/next nav for chapter pages
   let prevNextNav := match currentSlug with
     | some slug => renderPrevNextNav chapters slug toRoot
@@ -297,6 +302,9 @@ def primaryTemplateWithSidebar (chapters : Array ChapterInfo) (currentSlug : Opt
     .tag "link" #[("rel", "stylesheet"), ("href", s!"{toRoot}assets/paper.css")] Html.empty
   else
     Html.empty
+
+  -- Add class to wrapper when chapter panel is visible for CSS grid layout
+  let wrapperClass := if showChapterPanel then "wrapper with-chapter-panel" else "wrapper"
 
   return .tag "html" #[("lang", "en")] (
     .tag "head" #[] (
@@ -331,10 +339,12 @@ def primaryTemplateWithSidebar (chapters : Array ChapterInfo) (currentSlug : Opt
           )
         )
       ) ++
-      -- Main wrapper with sidebar and content
-      divClass "wrapper" (
-        -- Chapter sidebar navigation
+      -- Main wrapper with sidebar, optional chapter panel, and content
+      .tag "div" #[("class", wrapperClass)] (
+        -- Main sidebar navigation
         sidebar ++
+        -- Chapter panel (only for blueprint pages)
+        chapterPanel ++
         -- Main content area with prev/next nav
         divClass "content" (content ++ prevNextNav)
       ) ++
@@ -354,7 +364,7 @@ def nodeTemplate : NodeTemplate := renderNode
 /-- Template for rendering the index page -/
 def indexTemplate : IndexTemplate := renderIndex
 
-/-- Render full-page PDF viewer with embedded PDF -/
+/-- Render full-page PDF viewer with embedded PDF (maximized, no download button) -/
 def renderPdfPage (chapters : Array ChapterInfo) (config : Config) (availDocs : AvailableDocuments := {}) : Html :=
   let toRoot := ""
 
@@ -362,31 +372,15 @@ def renderPdfPage (chapters : Array ChapterInfo) (config : Config) (availDocs : 
   let mathjaxConfig := .tag "script" #[] (Html.text false (Macros.generateMathJaxConfig config.mathjaxMacrosJson))
 
   -- Build sidebar
-  let sidebar := renderSidebar chapters (some "pdf") toRoot config availDocs
+  let sidebar := renderSidebar chapters (some "pdf_tex") toRoot config availDocs
 
-  -- PDF viewer content
-  let pdfContent := divClass "pdf-viewer-container" (
-    .tag "h1" #[] (Html.text true "PDF Document") ++
-    .tag "p" #[("class", "pdf-description")] (
-      Html.text true "View or download the compiled PDF version of this document."
-    ) ++
-    .tag "div" #[("class", "pdf-actions")] (
-      .tag "a" #[("href", "paper.pdf"), ("download", ""), ("class", "pdf-download-btn")] (
-        Html.text true "Download PDF"
-      )
-    ) ++
+  -- PDF viewer content - maximized, inline embedded
+  let pdfContent := divClass "pdf-viewer-fullpage" (
     .tag "embed" #[
-      ("src", "paper.pdf"),
+      ("src", "paper.pdf#toolbar=0"),  -- Hide browser toolbar
       ("type", "application/pdf"),
-      ("width", "100%"),
-      ("height", "800px"),
-      ("class", "pdf-embed")
-    ] Html.empty ++
-    .tag "p" #[("class", "pdf-fallback")] (
-      Html.text true "If the PDF does not display, you can " ++
-      .tag "a" #[("href", "paper.pdf")] (Html.text true "download it directly") ++
-      Html.text true "."
-    )
+      ("class", "pdf-embed-fullpage")
+    ] Html.empty
   )
 
   .tag "html" #[("lang", "en")] (
@@ -398,47 +392,11 @@ def renderPdfPage (chapters : Array ChapterInfo) (config : Config) (availDocs : 
       .tag "link" #[("rel", "stylesheet"), ("href", s!"{toRoot}assets/common.css")] Html.empty ++
       .tag "link" #[("rel", "stylesheet"), ("href", s!"{toRoot}assets/blueprint.css")] Html.empty ++
       .tag "link" #[("rel", "icon"), ("href", "data:,")] Html.empty ++
-      -- Inline styles for PDF page
-      .tag "style" #[] (Html.text false "
-        .pdf-viewer-container {
-          padding: 1rem;
-        }
-        .pdf-viewer-container h1 {
-          margin-bottom: 0.5rem;
-        }
-        .pdf-description {
-          color: #666;
-          margin-bottom: 1rem;
-        }
-        .pdf-actions {
-          margin-bottom: 1rem;
-        }
-        .pdf-download-btn {
-          display: inline-block;
-          padding: 0.5rem 1rem;
-          background: #007bff;
-          color: white;
-          text-decoration: none;
-          border-radius: 4px;
-        }
-        .pdf-download-btn:hover {
-          background: #0056b3;
-        }
-        .pdf-embed {
-          border: 1px solid #ddd;
-          border-radius: 4px;
-        }
-        .pdf-fallback {
-          margin-top: 1rem;
-          color: #666;
-          font-size: 0.9rem;
-        }
-      ") ++
       mathjaxConfig ++
       .tag "script" #[("id", "MathJax-script"), ("async", ""),
                       ("src", "https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js")] Html.empty
     ) ++
-    .tag "body" #[] (
+    .tag "body" #[("class", "pdf-page")] (
       -- Header
       .tag "header" #[] (
         .tag "nav" #[("class", "header")] (
@@ -450,7 +408,7 @@ def renderPdfPage (chapters : Array ChapterInfo) (config : Config) (availDocs : 
       -- Main wrapper with sidebar and content
       divClass "wrapper" (
         sidebar ++
-        divClass "content" pdfContent
+        divClass "content pdf-content" pdfContent
       ) ++
       -- jQuery (for sidebar toggle)
       .tag "script" #[("src", "https://code.jquery.com/jquery-3.7.1.min.js"),
@@ -462,7 +420,7 @@ def renderPdfPage (chapters : Array ChapterInfo) (config : Config) (availDocs : 
     )
   )
 
-/-- Render full-page PDF viewer for Verso-generated PDFs -/
+/-- Render full-page PDF viewer for Verso-generated PDFs (maximized, no download button) -/
 def renderVersoPdfPage (chapters : Array ChapterInfo) (config : Config) (availDocs : AvailableDocuments := {}) : Html :=
   let toRoot := ""
 
@@ -472,29 +430,13 @@ def renderVersoPdfPage (chapters : Array ChapterInfo) (config : Config) (availDo
   -- Build sidebar
   let sidebar := renderSidebar chapters (some "pdf_verso") toRoot config availDocs
 
-  -- PDF viewer content
-  let pdfContent := divClass "pdf-viewer-container" (
-    .tag "h1" #[] (Html.text true "Verso PDF Document") ++
-    .tag "p" #[("class", "pdf-description")] (
-      Html.text true "View or download the PDF compiled from Verso source."
-    ) ++
-    .tag "div" #[("class", "pdf-actions")] (
-      .tag "a" #[("href", "paper_verso.pdf"), ("download", ""), ("class", "pdf-download-btn")] (
-        Html.text true "Download PDF"
-      )
-    ) ++
+  -- PDF viewer content - maximized, inline embedded
+  let pdfContent := divClass "pdf-viewer-fullpage" (
     .tag "embed" #[
-      ("src", "paper_verso.pdf"),
+      ("src", "paper_verso.pdf#toolbar=0"),  -- Hide browser toolbar
       ("type", "application/pdf"),
-      ("width", "100%"),
-      ("height", "800px"),
-      ("class", "pdf-embed")
-    ] Html.empty ++
-    .tag "p" #[("class", "pdf-fallback")] (
-      Html.text true "If the PDF does not display, you can " ++
-      .tag "a" #[("href", "paper_verso.pdf")] (Html.text true "download it directly") ++
-      Html.text true "."
-    )
+      ("class", "pdf-embed-fullpage")
+    ] Html.empty
   )
 
   .tag "html" #[("lang", "en")] (
@@ -506,47 +448,11 @@ def renderVersoPdfPage (chapters : Array ChapterInfo) (config : Config) (availDo
       .tag "link" #[("rel", "stylesheet"), ("href", s!"{toRoot}assets/common.css")] Html.empty ++
       .tag "link" #[("rel", "stylesheet"), ("href", s!"{toRoot}assets/blueprint.css")] Html.empty ++
       .tag "link" #[("rel", "icon"), ("href", "data:,")] Html.empty ++
-      -- Inline styles for PDF page
-      .tag "style" #[] (Html.text false "
-        .pdf-viewer-container {
-          padding: 1rem;
-        }
-        .pdf-viewer-container h1 {
-          margin-bottom: 0.5rem;
-        }
-        .pdf-description {
-          color: #666;
-          margin-bottom: 1rem;
-        }
-        .pdf-actions {
-          margin-bottom: 1rem;
-        }
-        .pdf-download-btn {
-          display: inline-block;
-          padding: 0.5rem 1rem;
-          background: #007bff;
-          color: white;
-          text-decoration: none;
-          border-radius: 4px;
-        }
-        .pdf-download-btn:hover {
-          background: #0056b3;
-        }
-        .pdf-embed {
-          border: 1px solid #ddd;
-          border-radius: 4px;
-        }
-        .pdf-fallback {
-          margin-top: 1rem;
-          color: #666;
-          font-size: 0.9rem;
-        }
-      ") ++
       mathjaxConfig ++
       .tag "script" #[("id", "MathJax-script"), ("async", ""),
                       ("src", "https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js")] Html.empty
     ) ++
-    .tag "body" #[] (
+    .tag "body" #[("class", "pdf-page")] (
       -- Header
       .tag "header" #[] (
         .tag "nav" #[("class", "header")] (
@@ -558,7 +464,7 @@ def renderVersoPdfPage (chapters : Array ChapterInfo) (config : Config) (availDo
       -- Main wrapper with sidebar and content
       divClass "wrapper" (
         sidebar ++
-        divClass "content" pdfContent
+        divClass "content pdf-content" pdfContent
       ) ++
       -- jQuery (for sidebar toggle)
       .tag "script" #[("src", "https://code.jquery.com/jquery-3.7.1.min.js"),
