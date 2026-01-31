@@ -371,19 +371,19 @@ This ensures Dress artifacts are built before Runway generation.
 
 ### SBS-Test
 
-Minimal test project (25 nodes, all 6 status colors):
+Minimal test project (~32 nodes, all 6 status colors):
 - Located at `../SBS-Test/` in the Side-by-Side Blueprint monorepo
 - Fast iteration for testing changes
 
 ### General Crystallographic Restriction
 
-Production example with paper generation:
+Production example with paper generation (~57 nodes):
 - Repository: [e-vergo/General_Crystallographic_Restriction](https://github.com/e-vergo/General_Crystallographic_Restriction)
 - Uses full pipeline: dashboard, dependency graph, paper, PDF
 
 ### PrimeNumberTheoremAnd
 
-Large-scale integration (530 annotations, 33 files):
+Large-scale integration (591 annotations):
 - Repository: [AlexKontorovich/PrimeNumberTheoremAnd](https://github.com/AlexKontorovich/PrimeNumberTheoremAnd)
 - Terence Tao's Prime Number Theorem project
 
