@@ -139,7 +139,10 @@ def renderSidebar (chapters : Array ChapterInfo) (currentSlug : Option String) (
   -- Verso document items (Paper_web, Paper_pdf, Blueprint)
   let versoPaperWeb := mkDocItem "Paper_web [Verso]" "paper_verso.html" "paper_verso" availDocs.paperWebVerso
   let versoPaperPdf := mkDocItem "Paper_pdf [Verso]" "pdf_verso.html" "pdf_verso" availDocs.paperPdfVerso
-  let versoBlueprint := mkDocItem "Blueprint [Verso]" "blueprint_verso.html" "blueprint_verso" availDocs.blueprintVerso
+  -- Blueprint [Verso] is expandable with chapter list (same chapters as TeX)
+  let versoBlueprint := if chapters.isEmpty
+    then mkDocItem "Blueprint [Verso]" "blueprint_verso.html" "blueprint_verso" availDocs.blueprintVerso
+    else mkExpandableDocItem "Blueprint [Verso]" "blueprint_verso.html" "blueprint_verso" availDocs.blueprintVerso "blueprint-verso" blueprintChapterItems
 
   -- External links (API Docs, GitHub)
   let docsItem := match config.docgen4Url with
