@@ -138,20 +138,22 @@ def runCompiler (config : PdfConfig) (texPath : System.FilePath) : IO CompileRes
     lastOutput := result.stdout ++ result.stderr
     lastExitCode := result.exitCode
 
-    -- For pdflatex-family, only continue if successful
+    -- For pdflatex-family, break early on non-zero exit code (but don't fail yet)
+    -- LaTeX compilers often return exit code 1 for warnings while still producing valid PDF
     if result.exitCode != 0 && config.compiler != .tectonic then
-      return .compilationFailed result.exitCode lastOutput
-
-  -- Check final exit code
-  if lastExitCode != 0 then
-    return .compilationFailed lastExitCode lastOutput
+      break
 
   -- Determine output PDF path
   let pdfPath := workDir / (baseName ++ ".pdf")
 
-  -- Check if PDF was actually generated
+  -- Check if PDF was actually generated - this is the true success criterion
+  -- LaTeX compilers (especially pdflatex) return exit code 1 for warnings like
+  -- "Underfull \hbox" even when they successfully generate the PDF
   if !(← pdfPath.pathExists) then
-    return .compilationFailed 1 (lastOutput ++ "\n[PDF file not found after compilation]")
+    if lastExitCode != 0 then
+      return .compilationFailed lastExitCode lastOutput
+    else
+      return .compilationFailed 1 "[PDF file not found after compilation]"
 
   -- Clean up auxiliary files if requested
   if !config.keepAuxFiles then
