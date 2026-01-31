@@ -374,26 +374,19 @@ def wrapInModal (nodeId : String) (sbsContent : Html) (linkUrl : String)
 
 /-- Render sidebar navigation for the dependency graph page.
     Duplicated from Theme.lean to avoid circular imports. -/
-private def renderDepGraphSidebar (chapters : Array ChapterInfo) (toRoot : String) (config : Config) (availDocs : AvailableDocuments := {}) : Html :=
-  let homeItem := .tag "li" #[] (
-    .tag "a" #[("href", s!"{toRoot}index.html")] (Html.text true "Blueprint Home")
+private def renderDepGraphSidebar (_chapters : Array ChapterInfo) (toRoot : String) (config : Config) (availDocs : AvailableDocuments := {}) : Html :=
+  -- Dashboard
+  let dashboardItem := .tag "li" #[] (
+    .tag "a" #[("href", s!"{toRoot}index.html"), ("class", "sidebar-item")] (Html.text true "Dashboard")
   )
 
-  -- Chapter items
-  let chapterItems := chapters.map fun chapter =>
-    let href := s!"{toRoot}{chapter.slug}.html"
-    let chapterPrefix := if chapter.isAppendix then "Appendix" else s!"{chapter.number}."
-    .tag "li" #[] (
-      .tag "a" #[("href", href)] (Html.text true s!"{chapterPrefix} {chapter.title}")
-    )
+  -- Dependency graph link (current page, so active)
+  let graphItem := .tag "li" #[] (
+    .tag "a" #[("href", s!"{toRoot}dep_graph.html"), ("class", "sidebar-item active")] (Html.text true "Dependency Graph")
+  )
 
   -- Separator element
   let separator := .tag "li" #[("class", "nav-separator")] Html.empty
-
-  -- Dependency graph link (current page, so active)
-  let graphItem := .tag "li" #[("class", "active")] (
-    .tag "a" #[("href", s!"{toRoot}dep_graph.html")] (Html.text true "Dependency Graph")
-  )
 
   -- Helper to create a sidebar document item (enabled or disabled)
   let mkDocItem (label : String) (href : String) (available : Bool) : Html :=
@@ -406,33 +399,23 @@ private def renderDepGraphSidebar (chapters : Array ChapterInfo) (toRoot : Strin
         .tag "span" #[("class", "sidebar-item disabled")] (Html.text true label)
       )
 
-  -- TeX Documents section header
-  let texHeader := .tag "li" #[("class", "nav-section-header")] (Html.text true "TeX Documents")
-
-  -- TeX document items (always show all 3, disabled if unavailable)
-  let texBlueprint := mkDocItem "Blueprint [TeX]" "index.html" availDocs.blueprintTex
+  -- TeX document items (Paper_web, Paper_pdf, Blueprint)
   let texPaperWeb := mkDocItem "Paper_web [TeX]" "paper_tex.html" availDocs.paperWebTex
   let texPaperPdf := mkDocItem "Paper_pdf [TeX]" "pdf_tex.html" availDocs.paperPdfTex
+  let texBlueprint := mkDocItem "Blueprint [TeX]" "index.html" availDocs.blueprintTex
 
-  -- Verso Documents section header
-  let versoHeader := .tag "li" #[("class", "nav-section-header")] (Html.text true "Verso Documents")
-
-  -- Verso document items (always show all 3, disabled if unavailable)
-  let versoBlueprint := mkDocItem "Blueprint [Verso]" "blueprint_verso.html" availDocs.blueprintVerso
+  -- Verso document items (Paper_web, Paper_pdf, Blueprint)
   let versoPaperWeb := mkDocItem "Paper_web [Verso]" "paper_verso.html" availDocs.paperWebVerso
   let versoPaperPdf := mkDocItem "Paper_pdf [Verso]" "pdf_verso.html" availDocs.paperPdfVerso
+  let versoBlueprint := mkDocItem "Blueprint [Verso]" "blueprint_verso.html" availDocs.blueprintVerso
 
-  -- Build document items array with section headers
-  let docItems : Array Html := #[texHeader, texBlueprint, texPaperWeb, texPaperPdf,
-                                  versoHeader, versoBlueprint, versoPaperWeb, versoPaperPdf]
-
-  -- External links (GitHub, API Docs)
-  let githubItem := match config.githubUrl with
-    | some url => .tag "li" #[] (.tag "a" #[("href", url), ("target", "_blank")] (Html.text true "GitHub"))
+  -- External links (API Docs, GitHub)
+  let docsItem := match config.docgen4Url with
+    | some url => .tag "li" #[] (.tag "a" #[("href", url), ("target", "_blank"), ("class", "sidebar-item")] (Html.text true "API Docs"))
     | none => Html.empty
 
-  let docsItem := match config.docgen4Url with
-    | some url => .tag "li" #[] (.tag "a" #[("href", url), ("target", "_blank")] (Html.text true "API Docs"))
+  let githubItem := match config.githubUrl with
+    | some url => .tag "li" #[] (.tag "a" #[("href", url), ("target", "_blank"), ("class", "sidebar-item")] (Html.text true "GitHub"))
     | none => Html.empty
 
   -- Theme toggle element
@@ -442,10 +425,19 @@ private def renderDepGraphSidebar (chapters : Array ChapterInfo) (toRoot : Strin
     .tag "span" #[("class", "theme-toggle-icon moon")] (Html.text true "☾")
   )
 
-  -- Build final nav items: home, chapters, separator, graph, separator, documents, separator, external links
-  let navItems := #[homeItem] ++ chapterItems ++ #[separator, graphItem, separator] ++
-    docItems ++
-    #[separator, githubItem, docsItem]
+  -- Flex spacer to push toggle to bottom
+  let flexSpacer := .tag "li" #[("class", "sidebar-spacer")] Html.empty
+
+  -- Build nav items in new order:
+  -- Dashboard, Dependency Graph, separator
+  -- Paper_web [TeX], Paper_pdf [TeX], Blueprint [TeX]
+  -- Paper_web [Verso], Paper_pdf [Verso], Blueprint [Verso]
+  -- separator, API Docs, GitHub
+  -- spacer (flex grow)
+  let navItems := #[dashboardItem, graphItem, separator] ++
+    #[texPaperWeb, texPaperPdf, texBlueprint] ++
+    #[versoPaperWeb, versoPaperPdf, versoBlueprint] ++
+    #[separator, docsItem, githubItem, flexSpacer]
 
   .tag "nav" #[("class", "toc")] (
     .tag "ul" #[("class", "sub-toc-0")] (.seq navItems) ++

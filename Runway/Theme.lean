@@ -65,84 +65,111 @@ structure Theme where
 
 namespace DefaultTheme
 
-/-- Render sidebar navigation for chapters -/
+/-- Render sidebar navigation -/
 def renderSidebar (chapters : Array ChapterInfo) (currentSlug : Option String) (toRoot : String) (config : Config) (availDocs : AvailableDocuments := {}) : Html :=
-  let homeClass := if currentSlug.isNone then "active" else ""
-  let homeItem := .tag "li" #[("class", homeClass)] (
-    .tag "a" #[("href", s!"{toRoot}index.html")] (Html.text true "Blueprint Home")
+  -- Dashboard (renamed from "Blueprint Home")
+  let dashboardClass := if currentSlug.isNone then "sidebar-item active" else "sidebar-item"
+  let dashboardItem := .tag "li" #[] (
+    .tag "a" #[("href", s!"{toRoot}index.html"), ("class", dashboardClass)] (Html.text true "Dashboard")
   )
 
-  -- Chapter items
-  let chapterItems := chapters.map fun chapter =>
-    let isActive := currentSlug == some chapter.slug
-    let itemClass := if isActive then "active" else ""
-    let href := s!"{toRoot}{chapter.slug}.html"
-    let chapterPrefix := if chapter.isAppendix then "Appendix" else s!"{chapter.number}."
-    .tag "li" #[("class", itemClass)] (
-      .tag "a" #[("href", href)] (Html.text true s!"{chapterPrefix} {chapter.title}")
-    )
+  -- Dependency graph link
+  let graphClass := if currentSlug == some "dep_graph" then "sidebar-item active" else "sidebar-item"
+  let graphItem := .tag "li" #[] (
+    .tag "a" #[("href", s!"{toRoot}dep_graph.html"), ("class", graphClass)] (Html.text true "Dependency Graph")
+  )
 
   -- Separator element
   let separator := .tag "li" #[("class", "nav-separator")] Html.empty
 
-  -- Dependency graph link
-  let graphClass := if currentSlug == some "dep_graph" then "active" else ""
-  let graphItem := .tag "li" #[("class", graphClass)] (
-    .tag "a" #[("href", s!"{toRoot}dep_graph.html")] (Html.text true "Dependency Graph")
-  )
-
-  -- Helper to create a sidebar document item (enabled or disabled)
+  -- Helper to create a sidebar document item (simple, non-expandable)
+  -- available=false -> disabled (grayed, unclickable)
+  -- available=true + matches currentSlug -> active (highlighted)
+  -- available=true + doesn't match -> normal
   let mkDocItem (label : String) (href : String) (slug : String) (available : Bool) : Html :=
     if available then
-      let cls := if currentSlug == some slug then "active" else ""
-      .tag "li" #[("class", cls)] (
-        .tag "a" #[("href", s!"{toRoot}{href}"), ("class", "sidebar-item")] (Html.text true label)
+      let isActive := currentSlug == some slug
+      let cls := if isActive then "sidebar-item active" else "sidebar-item"
+      .tag "li" #[] (
+        .tag "a" #[("href", s!"{toRoot}{href}"), ("class", cls)] (Html.text true label)
       )
     else
       .tag "li" #[] (
         .tag "span" #[("class", "sidebar-item disabled")] (Html.text true label)
       )
 
-  -- TeX Documents section header
-  let texHeader := .tag "li" #[("class", "nav-section-header")] (Html.text true "TeX Documents")
+  -- Helper to create an expandable sidebar document item with nested chapter list
+  let mkExpandableDocItem (label : String) (href : String) (slug : String) (available : Bool) (docId : String) (chapterItems : Array Html) : Html :=
+    if available then
+      let isActive := currentSlug == some slug
+      let cls := if isActive then "sidebar-item active" else "sidebar-item"
+      -- Expandable item with arrow, link, and nested chapter list
+      .tag "li" #[("class", "sidebar-item expandable")] (
+        .tag "div" #[("class", "item-header")] (
+          .tag "span" #[("class", "expand-arrow"), ("onclick", "toggleExpand(this)")] (Html.text true "▶") ++
+          .tag "a" #[("href", s!"{toRoot}{href}"), ("class", cls)] (Html.text true label)
+        ) ++
+        .tag "ul" #[("class", "chapter-list collapsed"), ("data-doc", docId)] (
+          .seq chapterItems
+        )
+      )
+    else
+      -- Disabled items don't need expand functionality
+      .tag "li" #[] (
+        .tag "span" #[("class", "sidebar-item disabled")] (Html.text true label)
+      )
 
-  -- TeX document items (always show all 3, disabled if unavailable)
-  let texBlueprint := mkDocItem "Blueprint [TeX]" "index.html" "" availDocs.blueprintTex
+  -- Build chapter list items for Blueprint [TeX]
+  let blueprintChapterItems := chapters.map fun chap =>
+    let chapterLabel := if chap.isAppendix
+      then s!"Appendix: {chap.title}"
+      else s!"Ch {chap.number}: {chap.title}"
+    .tag "li" #[] (
+      .tag "a" #[("href", s!"{toRoot}{chap.slug}.html")] (Html.text true chapterLabel)
+    )
+
+  -- TeX document items (Paper_web, Paper_pdf, Blueprint with chapters)
   let texPaperWeb := mkDocItem "Paper_web [TeX]" "paper_tex.html" "paper_tex" availDocs.paperWebTex
   let texPaperPdf := mkDocItem "Paper_pdf [TeX]" "pdf_tex.html" "pdf_tex" availDocs.paperPdfTex
+  -- Blueprint [TeX] is expandable with chapter list
+  let texBlueprint := if chapters.isEmpty
+    then mkDocItem "Blueprint [TeX]" "index.html" "" availDocs.blueprintTex
+    else mkExpandableDocItem "Blueprint [TeX]" "index.html" "" availDocs.blueprintTex "blueprint-tex" blueprintChapterItems
 
-  -- Verso Documents section header
-  let versoHeader := .tag "li" #[("class", "nav-section-header")] (Html.text true "Verso Documents")
-
-  -- Verso document items (always show all 3, disabled if unavailable)
-  let versoBlueprint := mkDocItem "Blueprint [Verso]" "blueprint_verso.html" "blueprint_verso" availDocs.blueprintVerso
+  -- Verso document items (Paper_web, Paper_pdf, Blueprint)
   let versoPaperWeb := mkDocItem "Paper_web [Verso]" "paper_verso.html" "paper_verso" availDocs.paperWebVerso
   let versoPaperPdf := mkDocItem "Paper_pdf [Verso]" "pdf_verso.html" "pdf_verso" availDocs.paperPdfVerso
+  let versoBlueprint := mkDocItem "Blueprint [Verso]" "blueprint_verso.html" "blueprint_verso" availDocs.blueprintVerso
 
-  -- Build document items array with section headers
-  let docItems : Array Html := #[texHeader, texBlueprint, texPaperWeb, texPaperPdf,
-                                  versoHeader, versoBlueprint, versoPaperWeb, versoPaperPdf]
-
-  -- External links (GitHub, API Docs)
-  let githubItem := match config.githubUrl with
-    | some url => .tag "li" #[] (.tag "a" #[("href", url), ("target", "_blank")] (Html.text true "GitHub"))
-    | none => Html.empty
-
+  -- External links (API Docs, GitHub)
   let docsItem := match config.docgen4Url with
-    | some url => .tag "li" #[] (.tag "a" #[("href", url), ("target", "_blank")] (Html.text true "API Docs"))
+    | some url => .tag "li" #[] (.tag "a" #[("href", url), ("target", "_blank"), ("class", "sidebar-item")] (Html.text true "API Docs"))
     | none => Html.empty
 
-  -- Theme toggle element
+  let githubItem := match config.githubUrl with
+    | some url => .tag "li" #[] (.tag "a" #[("href", url), ("target", "_blank"), ("class", "sidebar-item")] (Html.text true "GitHub"))
+    | none => Html.empty
+
+  -- Theme toggle element (will be pushed to bottom via flex spacer)
   let themeToggle := divClass "theme-toggle" (
     .tag "span" #[("class", "theme-toggle-icon sun")] (Html.text true "☀") ++
     .tag "span" #[("class", "theme-toggle-switch")] Html.empty ++
     .tag "span" #[("class", "theme-toggle-icon moon")] (Html.text true "☾")
   )
 
-  -- Build final nav items: home, chapters, separator, graph, separator, documents, separator, external links
-  let navItems := #[homeItem] ++ chapterItems ++ #[separator, graphItem, separator] ++
-    docItems ++
-    #[separator, githubItem, docsItem]
+  -- Flex spacer to push toggle to bottom
+  let flexSpacer := .tag "li" #[("class", "sidebar-spacer")] Html.empty
+
+  -- Build nav items in new order:
+  -- Dashboard, Dependency Graph, separator
+  -- Paper_web [TeX], Paper_pdf [TeX], Blueprint [TeX] (with chapters)
+  -- Paper_web [Verso], Paper_pdf [Verso], Blueprint [Verso]
+  -- separator, API Docs, GitHub
+  -- spacer (flex grow)
+  let navItems := #[dashboardItem, graphItem, separator] ++
+    #[texPaperWeb, texPaperPdf, texBlueprint] ++
+    #[versoPaperWeb, versoPaperPdf, versoBlueprint] ++
+    #[separator, docsItem, githubItem, flexSpacer]
 
   .tag "nav" #[("class", "toc")] (
     .tag "ul" #[("class", "sub-toc-0")] (.seq navItems) ++

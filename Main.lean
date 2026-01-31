@@ -53,7 +53,8 @@ Detection logic:
 
 /-- Possible locations where Verso document HTML outputs may be found -/
 def versOutputLocations (buildDir : FilePath) (projectName : String) : List FilePath :=
-  [ buildDir / "verso"                    -- .lake/build/verso/
+  [ buildDir / "runway"                   -- .lake/build/runway/ (SBSBlueprint output location)
+  , buildDir / "verso"                    -- .lake/build/verso/
   , buildDir / "verso" / projectName      -- .lake/build/verso/{ProjectName}/
   , buildDir.parent.getD "." / "_out"     -- .lake/_out/
   , "_out"                                 -- _out/ (project root)
@@ -91,6 +92,7 @@ def detectVersoDocuments (buildDir : FilePath) (projectName : String) : IO Verso
     if blueprintHtml.isNone then
       -- Try various naming conventions
       let candidates := [
+        loc / "blueprint_verso.html",  -- SBSBlueprint naming convention
         loc / "blueprint.html",
         loc / "Blueprint.html",
         loc / "index.html",  -- Some Verso sites use index.html as main output
@@ -105,6 +107,7 @@ def detectVersoDocuments (buildDir : FilePath) (projectName : String) : IO Verso
     -- Check for Paper output
     if paperHtml.isNone then
       let candidates := [
+        loc / "paper_verso.html",  -- SBSBlueprint naming convention
         loc / "paper.html",
         loc / "Paper.html",
         loc / projectName / "paper.html",
