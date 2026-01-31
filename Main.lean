@@ -122,6 +122,23 @@ def resolvePathOpt (basePath : FilePath) (p : Option String) : Option String :=
     if fp.isAbsolute then fp.toString
     else (basePath / fp).toString
 
+/-- Derive tex paths from runwayDir if set, otherwise use explicit paths -/
+def deriveTexPaths (configDir : FilePath) (config : Config) : IO (Option String × Option String) := do
+  match config.runwayDir with
+  | some dir =>
+    -- runwayDir is set: derive paths from {runwayDir}/src/
+    let runwayPath := resolvePath configDir dir
+    let blueprintPath := runwayPath / "src" / "blueprint.tex"
+    let paperPath := runwayPath / "src" / "paper.tex"
+    -- blueprint.tex is required, paper.tex is optional
+    let blueprintTexPath := if ← blueprintPath.pathExists then some blueprintPath.toString else none
+    let paperTexPath := if ← paperPath.pathExists then some paperPath.toString else none
+    return (blueprintTexPath, paperTexPath)
+  | none =>
+    -- Legacy: use explicit paths
+    return (resolvePathOpt configDir config.blueprintTexPath,
+            resolvePathOpt configDir config.paperTexPath)
+
 /-- Load configuration from JSON file and parse MathJax macros from blueprint.tex -/
 def loadConfig (path : FilePath) : IO Config := do
   if ← path.pathExists then
@@ -130,12 +147,14 @@ def loadConfig (path : FilePath) : IO Config := do
     | .ok (config : Config) =>
       -- Resolve paths relative to config file's directory
       let configDir := path.parent.getD "."
+      -- Derive tex paths from runwayDir or use legacy explicit paths
+      let (blueprintTexPath, paperTexPath) ← deriveTexPaths configDir config
       let resolvedConfig : Config := {
         config with
         outputDir := resolvePath configDir config.outputDir
         assetsDir := resolvePath configDir config.assetsDir
-        blueprintTexPath := resolvePathOpt configDir config.blueprintTexPath
-        paperTexPath := resolvePathOpt configDir config.paperTexPath
+        blueprintTexPath := blueprintTexPath
+        paperTexPath := paperTexPath
       }
 
       -- Load MathJax macros from both blueprint.tex and paper.tex

@@ -28,11 +28,13 @@ structure Config where
   baseUrl : String := "/"
   /-- Output directory for generated HTML -/
   outputDir : System.FilePath := "_site"
-  /-- Path to the blueprint.tex file for chapter-based navigation -/
+  /-- Directory containing runway sources (blueprint.tex, paper.tex in src/ subdirectory) -/
+  runwayDir : Option String := none
+  /-- Path to the blueprint.tex file for chapter-based navigation (legacy, prefer runwayDir) -/
   blueprintTexPath : Option String := none
   /-- Directory containing static assets (blueprint.css, plastex.js, verso-code.js) -/
   assetsDir : System.FilePath
-  /-- Path to paper.tex for ar5iv-style paper generation -/
+  /-- Path to paper.tex for ar5iv-style paper generation (legacy, prefer runwayDir) -/
   paperTexPath : Option String := none
   /-- Preferred PDF compiler (pdflatex, tectonic, xelatex, lualatex) -/
   pdfCompiler : Option String := none
@@ -48,6 +50,7 @@ instance : ToJson Config where
     ("docgen4Url", match c.docgen4Url with | some u => .str u | none => .null),
     ("baseUrl", .str c.baseUrl),
     ("outputDir", .str c.outputDir.toString),
+    ("runwayDir", match c.runwayDir with | some p => .str p | none => .null),
     ("blueprintTexPath", match c.blueprintTexPath with | some p => .str p | none => .null),
     ("assetsDir", .str c.assetsDir.toString),
     ("paperTexPath", match c.paperTexPath with | some p => .str p | none => .null),
@@ -62,6 +65,7 @@ instance : FromJson Config where
     let docgen4Url : Option String := (j.getObjValAs? String "docgen4Url").toOption
     let baseUrl : String ← j.getObjValAs? String "baseUrl" <|> pure "/"
     let outputDir : String ← j.getObjValAs? String "outputDir" <|> pure "_site"
+    let runwayDir : Option String := (j.getObjValAs? String "runwayDir").toOption
     let blueprintTexPath : Option String := (j.getObjValAs? String "blueprintTexPath").toOption
     let assetsDir : String ← j.getObjValAs? String "assetsDir"
     let paperTexPath : Option String := (j.getObjValAs? String "paperTexPath").toOption
@@ -73,6 +77,7 @@ instance : FromJson Config where
       docgen4Url := docgen4Url
       baseUrl := baseUrl
       outputDir := outputDir
+      runwayDir := runwayDir
       blueprintTexPath := blueprintTexPath
       assetsDir := assetsDir
       paperTexPath := paperTexPath
