@@ -102,6 +102,12 @@ def renderSidebar (chapters : Array ChapterInfo) (currentSlug : Option String) (
     .tag "a" #[("href", s!"{toRoot}pdf.html")] (Html.text true "Paper [pdf]")
   )
 
+  -- Verso Paper link (Verso-authored paper)
+  let versoPaperClass := if currentSlug == some "verso_paper" then "active" else ""
+  let versoPaperItem := .tag "li" #[("class", versoPaperClass)] (
+    .tag "a" #[("href", s!"{toRoot}verso_paper.html")] (Html.text true "Verso Paper")
+  )
+
   -- External links (GitHub, API Docs)
   let githubItem := match config.githubUrl with
     | some url => .tag "li" #[] (.tag "a" #[("href", url), ("target", "_blank")] (Html.text true "GitHub"))
@@ -120,7 +126,7 @@ def renderSidebar (chapters : Array ChapterInfo) (currentSlug : Option String) (
 
   .tag "nav" #[("class", "toc")] (
     .tag "ul" #[("class", "sub-toc-0")] (
-      .seq #[homeItem] ++ .seq chapterItems ++ .seq #[separator, graphItem, paperItem, pdfItem, separator, githubItem, docsItem]
+      .seq #[homeItem] ++ .seq chapterItems ++ .seq #[separator, graphItem, paperItem, pdfItem, versoPaperItem, separator, githubItem, docsItem]
     ) ++
     themeToggle
   )

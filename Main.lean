@@ -742,6 +742,67 @@ def runBuild (cliConfig : CLIConfig) : IO UInt32 := do
     else
       IO.eprintln s!"Warning: paper.tex not found at {texPath}, skipping paper and PDF generation."
 
+  -- Generate verso_paper.html (Verso-authored paper page)
+  let versoPaperContent := Verso.Output.Html.tag "div" #[("class", "verso-paper-page")] (
+    Verso.Output.Html.tag "h1" #[] (Verso.Output.Html.text true "Verso Paper") ++
+    Verso.Output.Html.tag "p" #[("class", "verso-paper-intro")] (
+      Verso.Output.Html.text true "This page displays papers authored in Verso format. Verso papers are type-checked Lean documents that can embed formal statements and proofs from the blueprint."
+    ) ++
+    Verso.Output.Html.tag "h2" #[] (Verso.Output.Html.text true "Usage") ++
+    Verso.Output.Html.tag "p" #[] (
+      Verso.Output.Html.text true "To create a Verso paper, add a " ++
+      Verso.Output.Html.tag "code" #[] (Verso.Output.Html.text true "paper.lean") ++
+      Verso.Output.Html.text true " file to your project using the VersoPaper genre:"
+    ) ++
+    Verso.Output.Html.tag "pre" #[("class", "verso-example")] (
+      Verso.Output.Html.tag "code" #[] (Verso.Output.Html.text true
+"import VersoPaper
+
+open Verso.Genre.Paper
+
+#doc (Paper) \"My Paper Title\" =>
+
+:::paperFull \"thm:main\"
+
+Some prose text explaining the theorem...
+
+:::leanModule \"MyProject.Theorems\"")
+    ) ++
+    Verso.Output.Html.tag "h2" #[] (Verso.Output.Html.text true "Available Blocks") ++
+    Verso.Output.Html.tag "ul" #[] (
+      Verso.Output.Html.tag "li" #[] (
+        Verso.Output.Html.tag "code" #[] (Verso.Output.Html.text true ":::paperStatement \"label\"") ++
+        Verso.Output.Html.text true " - Insert the LaTeX statement with a link to Lean code"
+      ) ++
+      Verso.Output.Html.tag "li" #[] (
+        Verso.Output.Html.tag "code" #[] (Verso.Output.Html.text true ":::paperFull \"label\"") ++
+        Verso.Output.Html.text true " - Insert the full side-by-side display"
+      ) ++
+      Verso.Output.Html.tag "li" #[] (
+        Verso.Output.Html.tag "code" #[] (Verso.Output.Html.text true ":::paperProof \"label\"") ++
+        Verso.Output.Html.text true " - Insert only the proof body"
+      ) ++
+      Verso.Output.Html.tag "li" #[] (
+        Verso.Output.Html.tag "code" #[] (Verso.Output.Html.text true ":::leanNode \"label\"") ++
+        Verso.Output.Html.text true " - Insert a single Lean node"
+      ) ++
+      Verso.Output.Html.tag "li" #[] (
+        Verso.Output.Html.tag "code" #[] (Verso.Output.Html.text true ":::leanModule \"ModuleName\"") ++
+        Verso.Output.Html.text true " - Insert all nodes from a module"
+      )
+    )
+  )
+  let versoPaperCtx : Runway.Render.Context := {
+    config := config
+    depGraph := site.depGraph
+    path := #[]
+  }
+  let versoPaperTemplate := Runway.DefaultTheme.primaryTemplateWithSidebar site.chapters (some "verso_paper")
+  let (versoPaperHtml, _) ← versoPaperTemplate versoPaperContent |>.run versoPaperCtx
+  let versoPaperOutputPath := outputDir / "verso_paper.html"
+  IO.FS.writeFile versoPaperOutputPath (Verso.Output.Html.doctype ++ "\n" ++ versoPaperHtml.asString)
+  IO.println s!"  - Generated verso_paper.html"
+
   return 0
 
 /-- Execute the serve command -/
