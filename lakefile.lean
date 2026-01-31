@@ -16,6 +16,11 @@ lean_exe runway where
 require Dress from git
   "https://github.com/e-vergo/Dress.git" @ "main"
 
+-- Direct dependency on verso for VersoPaper library
+-- (Dress depends on verso but doesn't expose VersoPaper in LEAN_PATH)
+require verso from git
+  "https://github.com/e-vergo/verso.git" @ "main"
+
 /-! ## Path Helpers -/
 
 /-- Get the runway output directory.

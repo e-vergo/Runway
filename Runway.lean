@@ -19,6 +19,7 @@ import Runway.Doc
 import Runway.Assets
 import Runway.Paper
 import Runway.Macros
+import Runway.VersoPaper
 
 /-!
 # Runway
