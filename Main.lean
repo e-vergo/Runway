@@ -72,11 +72,13 @@ structure VersoDocuments where
   hasPaperSource : Bool := false
   deriving Repr, Inhabited
 
-/-- Detect Verso document sources and outputs for a project -/
-def detectVersoDocuments (buildDir : FilePath) (projectName : String) : IO VersoDocuments := do
-  -- Check for source files
-  let blueprintSource : FilePath := projectName / "Blueprint.lean"
-  let paperSource : FilePath := projectName / "Paper.lean"
+/-- Detect Verso document sources and outputs for a project.
+    `projectRoot` is the directory containing the project (where runway.json lives).
+    Source files are checked at `{projectRoot}/{projectName}/Blueprint.lean` etc. -/
+def detectVersoDocuments (buildDir : FilePath) (projectName : String) (projectRoot : FilePath) : IO VersoDocuments := do
+  -- Check for source files relative to project root
+  let blueprintSource : FilePath := projectRoot / projectName / "Blueprint.lean"
+  let paperSource : FilePath := projectRoot / projectName / "Paper.lean"
 
   let hasBlueprintSource ← blueprintSource.pathExists
   let hasPaperSource ← paperSource.pathExists
@@ -694,7 +696,9 @@ def runBuild (cliConfig : CLIConfig) : IO UInt32 := do
     | some texPathStr => (texPathStr : FilePath).pathExists
 
   -- Detect Verso documents (Blueprint.lean, Paper.lean sources)
-  let versoDocs ← detectVersoDocuments cliConfig.buildDir config.projectName
+  -- Use config file's directory as project root (where runway.json lives)
+  let projectRoot := cliConfig.configPath.parent.getD "."
+  let versoDocs ← detectVersoDocuments cliConfig.buildDir config.projectName projectRoot
 
   -- Detect if a PDF compiler is available (needed for PDF generation)
   let pdfCompilerAvailable ← do
@@ -941,11 +945,11 @@ Some prose text explaining the theorem...
     depGraph := site.depGraph
     path := #[]
   }
-  let versoPaperTemplate := Runway.DefaultTheme.primaryTemplateWithSidebar site.chapters (some "verso_paper") availDocs
+  let versoPaperTemplate := Runway.DefaultTheme.primaryTemplateWithSidebar site.chapters (some "paper_verso") availDocs
   let (versoPaperHtml, _) ← versoPaperTemplate versoPaperContent |>.run versoPaperCtx
-  let versoPaperOutputPath := outputDir / "verso_paper.html"
+  let versoPaperOutputPath := outputDir / "paper_verso.html"
   IO.FS.writeFile versoPaperOutputPath (Verso.Output.Html.doctype ++ "\n" ++ versoPaperHtml.asString)
-  IO.println s!"  - Generated verso_paper.html"
+  IO.println s!"  - Generated paper_verso.html"
 
   -- Generate blueprint_verso.html (Verso-authored blueprint page)
   let versoBlueprintContent := Verso.Output.Html.tag "div" #[("class", "verso-blueprint-page")] (
